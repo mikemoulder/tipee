@@ -1,0 +1,23 @@
+{
+  "name": "tipee",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tip YouTube creators in USDC on Arc, straight from the video page.",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "verify-chain": "node scripts/verify-chain.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --build --verbose",
+    "build": "npm run build --workspaces --if-present"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.5"
+  }
+}

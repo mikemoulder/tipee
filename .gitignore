@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+.next/
+*.tsbuildinfo
+
+# Secrets — never commit
+.env
+.env.local
+.env.*.local
+.claude/settings.local.json
+
+# Extension build artifacts
+packages/extension/dist/
+*.crx
+*.pem
+*.zip
+
+# Test / coverage
+coverage/
+.vitest/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+
+# Logs
+*.log
+npm-debug.log*

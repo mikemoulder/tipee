@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    // DOM is here for the web-platform globals that both runtimes provide —
+    // `URL`, `crypto.subtle`, `fetch` — not because every package renders. Node
+    // 20 and every supported browser have all three. The trade-off is that
+    // `document` also typechecks in backend code; it would throw on the first
+    // call, and the alternative (hand-rolling URL host parsing in
+    // security-relevant code) is worse.
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": true,
+
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "composite": true,
+
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  }
+}

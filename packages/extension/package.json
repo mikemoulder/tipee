@@ -1,0 +1,20 @@
+{
+  "name": "@tipee/extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Tipee browser extension (MV3). Non-custodial wallet, gift button, tip composer.",
+  "scripts": {
+    "build": "vite build && vite build --config vite.config.content.ts",
+    "dev": "vite build --watch",
+    "typecheck": "tsc --build"
+  },
+  "dependencies": {
+    "@tipee/shared": "*",
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.287",
+    "vite": "^6.0.7"
+  }
+}
