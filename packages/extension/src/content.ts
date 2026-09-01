@@ -93,7 +93,11 @@ function injectTipButton(): void {
   button.setAttribute('aria-label', 'Tip this creator')
   button.title = 'Tip this creator'
   button.addEventListener('click', () => {
-    const currentCreator = creator ?? scrapeCreator(videoId)
+    // Fresh reading first, snapshot only as a floor. The snapshot is taken the
+    // instant the action row appears, which is a beat before YouTube fills in
+    // the owner avatar — trusting it meant the composer was handed a creator
+    // with no picture for the whole life of the page.
+    const currentCreator = scrapeCreator(videoId) ?? creator
     if (!currentCreator) {
       button.title = 'Creator details are still loading'
       return

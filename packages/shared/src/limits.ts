@@ -143,3 +143,42 @@ export function maxTippable(balance: bigint, gasCost: bigint, minimum: bigint): 
   if (spendable < minimum) return 0n
   return spendable
 }
+
+/**
+ * How much memo a tip may carry, in bytes.
+ *
+ * Bytes, not characters. A memo rides along in transaction calldata, where the
+ * unit of cost — and of any downstream length check — is the byte: an emoji is
+ * four of them and a CJK character three. Counting characters would let a
+ * "120-character" memo weigh 480 bytes and blow whatever budget the caller set.
+ */
+export const MEMO_MAX_BYTES = 120
+
+/** What `memo` will actually weigh once encoded. */
+export function memoByteLength(memo: string): number {
+  return new TextEncoder().encode(memo).length
+}
+
+/**
+ * Trims `memo` down to the byte budget without splitting a character.
+ *
+ * Slicing the encoded bytes directly would cut a multi-byte character in half
+ * and leave a replacement glyph on the end. Iterating the string instead walks
+ * whole code points, so what comes back is always valid text. A ZWJ sequence
+ * can still lose a trailing joiner and render as its parts — valid, just not
+ * the emoji that was typed, which is the acceptable end of this trade.
+ */
+export function fitMemo(memo: string): string {
+  const encoder = new TextEncoder()
+  if (encoder.encode(memo).length <= MEMO_MAX_BYTES) return memo
+
+  let used = 0
+  let fitted = ''
+  for (const character of memo) {
+    const size = encoder.encode(character).length
+    if (used + size > MEMO_MAX_BYTES) break
+    used += size
+    fitted += character
+  }
+  return fitted
+}

@@ -20,6 +20,9 @@ export {
 export {
   MIN_TIP,
   TIP_PRESETS,
+  MEMO_MAX_BYTES,
+  memoByteLength,
+  fitMemo,
   minTipInUnits,
   validateTip,
   maxTippable,
@@ -27,6 +30,15 @@ export {
   type TipValidation,
   type TipValidationInput,
 } from './limits'
+
+export {
+  ARC_MEMO_ADDRESS,
+  ARC_MEMO_ABI,
+  memoIdFromNonce,
+  nonceFromMemoId,
+  encodeMemoData,
+  decodeMemoData,
+} from './arc'
 
 export {
   isValidChannelId,
@@ -37,6 +49,8 @@ export {
 
 export type {
   ScrapedCreator,
+  ComposerContext,
+  SendTipOutcome,
   ResolveCreatorResponse,
   RecordTipRequest,
   RecordTipResponse,

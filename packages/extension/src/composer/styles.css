@@ -1,23 +1,227 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@500;600;700;800&display=swap');
+/*
+ * The tip composer, in the Talise design language (talise.io).
+ *
+ * Two traits carry it: monospace does almost all the work, with a grotesque
+ * kept for display lines only; and the surface is pale sage rather than white,
+ * so the white cards sitting on it read as raised without needing a shadow.
+ * `TWK Everett` is a licensed face, so this uses Hanken Grotesk — the fallback
+ * Talise's own stack names next — which is on Google Fonts.
+ */
 
-:root { color: #f7f7f2; background: #101411; font-family: Manrope, 'Segoe UI', sans-serif; }
+@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --sage: #ecefe8;
+  --card: #ffffff;
+  --tint: #f5f7f2;
+  --rule: #e2e6dd;
+  --forest: #2f6a1f;
+  --mint: #caffb8;
+  --ink: #121a0f;
+  --muted: #55634e;
+  --faint: #8b9784;
+  --on-forest: #f2f4f2;
+  --danger: #9a3412;
+
+  --display: 'Hanken Grotesk', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', monospace;
+
+  color: var(--ink);
+  background: var(--sage);
+  font-family: var(--mono);
+  -webkit-font-smoothing: antialiased;
+}
+
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 340px; background: linear-gradient(145deg, #243a2a, #101411 42%); }
-main { min-height: 100vh; padding: 26px; }
-section { display: grid; gap: 18px; }
-.brand { color: #c4f36b; font-size: 12px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
-h1 { margin: 0; max-width: 290px; font-size: 27px; line-height: 1.08; letter-spacing: 0; }
-.handle { margin-top: -10px; color: #aeb9ae; font-family: 'DM Mono', monospace; font-size: 12px; }
-.creator { display: flex; align-items: center; gap: 12px; padding: 14px; border: 1px solid #435447; border-radius: 8px; background: #18221a; }
-.avatar { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 50%; color: #101411; background: #c4f36b; font-weight: 800; }
-.creator-copy { display: grid; gap: 3px; }
-.creator-copy strong { font-size: 13px; }
-.creator-copy span { color: #849385; font-size: 11px; }
-label { display: grid; gap: 8px; color: #aeb9ae; font-size: 12px; font-weight: 700; }
-input { width: 100%; border: 1px solid #506252; border-radius: 6px; padding: 14px; outline: 0; color: #f7f7f2; background: #101411; font: 500 22px 'DM Mono', monospace; }
-input:focus { border-color: #c4f36b; }
-.presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.preset { padding: 10px 4px; color: #d5ded3; background: #263229; border: 1px solid #435447; }
-.preset:hover { color: #101411; background: #c4f36b; }
-.primary { width: 100%; padding: 14px; }
-.note { color: #758477; font-size: 11px; line-height: 1.5; }
+
+body { margin: 0; min-width: 340px; background: var(--sage); }
+
+main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 100vh;
+  padding: 18px 20px 20px;
+}
+
+/* Talise marks its edges with corner ticks rather than a full frame. Eight
+   gradient layers, two per corner — no extra elements to position. */
+.bracket {
+  --tick: 9px;
+  --hair: 1.5px;
+  --mark: var(--forest);
+  padding: 5px;
+  background:
+    linear-gradient(var(--mark), var(--mark)) 0 0 / var(--tick) var(--hair) no-repeat,
+    linear-gradient(var(--mark), var(--mark)) 0 0 / var(--hair) var(--tick) no-repeat,
+    linear-gradient(var(--mark), var(--mark)) 100% 0 / var(--tick) var(--hair) no-repeat,
+    linear-gradient(var(--mark), var(--mark)) 100% 0 / var(--hair) var(--tick) no-repeat,
+    linear-gradient(var(--mark), var(--mark)) 0 100% / var(--tick) var(--hair) no-repeat,
+    linear-gradient(var(--mark), var(--mark)) 0 100% / var(--hair) var(--tick) no-repeat,
+    linear-gradient(var(--mark), var(--mark)) 100% 100% / var(--tick) var(--hair) no-repeat,
+    linear-gradient(var(--mark), var(--mark)) 100% 100% / var(--hair) var(--tick) no-repeat;
+}
+
+/* Brand strip ------------------------------------------------------------ */
+
+.strip { display: flex; align-items: center; }
+.wordmark { font-family: var(--display); font-size: 17px; font-weight: 600; letter-spacing: -0.02em; }
+
+/* Creator ---------------------------------------------------------------- */
+
+.hero { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+
+.avatar {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--mint);
+  box-shadow: 0 0 0 1px var(--rule), 0 0 0 5px var(--card);
+}
+.avatar img { width: 100%; height: 100%; object-fit: cover; }
+.avatar .initials { color: var(--forest); font-family: var(--display); font-size: 31px; font-weight: 500; line-height: 1; }
+
+.name { margin-top: 3px; font-family: var(--display); font-size: 19px; font-weight: 600; letter-spacing: -0.02em; }
+.handle { color: var(--muted); font-size: 12px; }
+
+/* Headline --------------------------------------------------------------- */
+
+.headline { margin: 1px 0 0; color: var(--ink); font-family: var(--display); font-size: 26px; font-weight: 500; letter-spacing: -0.03em; line-height: 1.1; text-align: center; }
+.headline em { color: var(--forest); font-style: normal; }
+
+/* Amount ----------------------------------------------------------------- */
+
+.entry { display: flex; flex-direction: column; gap: 9px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field input {
+  width: 100%;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 16px;
+  outline: 0;
+  color: var(--ink);
+  background: var(--card);
+  font: 500 26px/1.1 var(--mono);
+  text-align: center;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.field input:focus-visible { border-color: var(--forest); box-shadow: 0 0 0 3px rgba(47, 106, 31, 0.15); }
+.field input[aria-invalid='true'] { border-color: var(--danger); }
+.denom { color: var(--faint); font-size: 9.5px; letter-spacing: 0.14em; text-align: right; text-transform: uppercase; }
+.denom.is-error { color: var(--danger); letter-spacing: 0.02em; text-transform: none; }
+
+.presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+.preset {
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 12px 0;
+  cursor: pointer;
+  color: var(--muted);
+  background: var(--card);
+  font: 500 12px var(--mono);
+  transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
+}
+.preset:hover { color: var(--ink); border-color: var(--faint); }
+.preset[aria-pressed='true'] { color: var(--forest); border-color: var(--forest); background: var(--mint); }
+
+/* Memo ------------------------------------------------------------------- */
+
+.memo { display: flex; flex: 1; flex-direction: column; gap: 6px; min-height: 92px; }
+.memo-head { display: flex; align-items: baseline; justify-content: space-between; }
+.memo-head label { color: var(--muted); font-size: 10.5px; }
+#memo-count { color: var(--faint); font-size: 9.5px; letter-spacing: 0.06em; }
+#memo-count.is-full { color: var(--danger); }
+#memo {
+  flex: 1;
+  width: 100%;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 12px;
+  outline: 0;
+  resize: none;
+  color: var(--ink);
+  background: var(--card);
+  font: 400 12px/1.6 var(--mono);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+#memo::placeholder { color: var(--faint); }
+#memo:focus-visible { border-color: var(--forest); box-shadow: 0 0 0 3px rgba(47, 106, 31, 0.15); }
+
+/* Action ----------------------------------------------------------------- */
+
+.primary {
+  width: 100%;
+  border: 0;
+  border-radius: 2px;
+  padding: 14px;
+  cursor: pointer;
+  color: var(--on-forest);
+  background: var(--forest);
+  font: 500 12px var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition: background-color 120ms ease;
+}
+.primary:hover { background: #275718; }
+.primary:disabled { cursor: not-allowed; color: var(--faint); background: var(--rule); }
+/* The corner ticks are the affordance, so they go when the action does. */
+.bracket:has(.primary:disabled) { --mark: transparent; }
+
+:focus-visible { outline: 2px solid var(--forest); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
+
+/* Signing ---------------------------------------------------------------- */
+
+/* While the PIN is up, the amount and note are settled — hiding them makes
+   room for the confirmation and stops what is being signed from moving. */
+body.is-signing .entry,
+body.is-signing .memo,
+body.is-signing .headline { display: none; }
+
+#footer { display: flex; flex-direction: column; gap: 8px; margin-top: auto; }
+/* With the fields hidden there is nothing left to push against, so the panel
+   takes the free space and centres in it rather than clinging to the floor. */
+body.is-signing #footer { flex: 1; justify-content: center; margin-top: 0; }
+
+.context-note:empty { display: none; }
+.context-note { margin: 0; color: var(--danger); font-size: 10.5px; line-height: 1.5; text-align: center; }
+
+.signing-summary { margin: 0; color: var(--ink); font-size: 13px; font-weight: 500; text-align: center; }
+.signing-summary.sent { color: var(--forest); }
+
+.pin-label { color: var(--faint); font-size: 9.5px; letter-spacing: 0.1em; text-align: center; text-transform: uppercase; }
+
+#pin {
+  width: 100%;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 13px;
+  outline: 0;
+  color: var(--ink);
+  background: var(--card);
+  font: 500 18px var(--mono);
+  letter-spacing: 0.3em;
+  text-align: center;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+#pin:focus-visible { border-color: var(--forest); box-shadow: 0 0 0 3px rgba(47, 106, 31, 0.15); }
+
+#footer .error { min-height: 14px; margin: 0; color: var(--danger); font-size: 11px; text-align: center; }
+
+.link {
+  border: 0;
+  padding: 2px;
+  cursor: pointer;
+  color: var(--muted);
+  background: none;
+  font: 400 10.5px var(--mono);
+  text-align: center;
+  text-decoration: underline;
+}
+.link:hover { color: var(--ink); }

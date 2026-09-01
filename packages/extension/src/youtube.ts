@@ -125,14 +125,29 @@ function creatorFromDom(): CreatorCandidate | null {
   const title = link?.textContent?.trim()
   if (!link || !title) return null
 
-  const avatar = owner.querySelector<HTMLImageElement>('#avatar img, img#img, yt-img-shadow img')
-  const avatarUrl = avatar?.src
+  const avatar = owner.querySelector<HTMLImageElement>(
+    '#avatar img, img#img, yt-img-shadow img, yt-avatar-shape img',
+  )
+  const avatarUrl = pictureUrl(avatar?.src)
 
   return {
     title,
     canonicalBaseUrl: link.href,
     ...(avatarUrl ? { avatar: { thumbnails: [{ url: avatarUrl }] } } : {}),
   }
+}
+
+/**
+ * An avatar `src`, but only if it is a real address.
+ *
+ * YouTube mounts the image element before it has a picture to put in it, so
+ * early on the `src` is empty or a placeholder. Capturing one of those is worse
+ * than capturing nothing: it looks like a successful read, and the composer
+ * would show a blank where a face belongs rather than falling back to initials.
+ */
+function pictureUrl(value: string | undefined): string | null {
+  if (!value) return null
+  return value.startsWith('https://') || value.startsWith('http://') ? value : null
 }
 
 function findCreator(value: unknown): CreatorCandidate | null {

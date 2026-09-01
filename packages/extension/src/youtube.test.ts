@@ -115,6 +115,16 @@ describe('scrapeCreator from the DOM', () => {
     })
   })
 
+  it('treats a placeholder src as no picture at all', () => {
+    // YouTube mounts the <img> before it has anything to put in it. A blank
+    // where a face belongs is worse than the initials fallback.
+    renderOwner('MKBHD', '@mkbhd', 'data:image/gif;base64,R0lGODlhAQABAAAAACw=')
+    expect(scrapeCreator(VIDEO_A)?.avatarUrl).toBeNull()
+
+    renderOwner('MKBHD', '@mkbhd', '')
+    expect(scrapeCreator(VIDEO_A)?.avatarUrl).toBeNull()
+  })
+
   it('carries the avatar through, so the composer can show a picture', () => {
     renderOwner('Marques Brownlee', '@mkbhd', 'https://yt3.example/mkbhd.jpg')
 

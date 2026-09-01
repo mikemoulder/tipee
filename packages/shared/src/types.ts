@@ -108,9 +108,42 @@ export interface ApiError {
   message: string
 }
 
+/** What the composer needs before it can validate a tip against real funds. */
+export interface ComposerContext {
+  /** The gifter's wallet, or null when none is set up yet. */
+  walletAddress: string | null
+  /** Spendable USDC, accounting units. Null when it could not be read. */
+  balance: string | null
+  /** Estimated fee for *this* tip, accounting units. Null when unknown. */
+  gasCost: string | null
+  /** Escrow wallet the tip would be paid into. */
+  recipient: string | null
+  /** Why the above is incomplete. Terse, safe to show as-is. */
+  problem: string | null
+}
+
+/** The end of a tip. A failure never leaves a hash behind. */
+export type SendTipOutcome =
+  | { ok: true; txHash: string }
+  | { ok: false; message: string }
+
 /** Messages between the content script, the service worker, and the composer. */
 export type ExtensionMessage =
   | { type: 'OPEN_COMPOSER'; creator: ScrapedCreator; screenX: number; screenY: number }
-  | { type: 'GET_COMPOSER_CONTEXT'; nonce: string }
+  /**
+   * Asks the worker what this tip would actually cost. `amount` and `memo` are
+   * both part of the question: the memo decides whether the transaction is a
+   * bare transfer or a `Memo`-wrapped one, and the wrapper's gas comes out of
+   * the same USDC balance as the tip.
+   */
+  | { type: 'GET_COMPOSER_CONTEXT'; nonce: string; amount: string; memo: string }
   | { type: 'GET_WALLET_STATE' }
-  | { type: 'SEND_TIP'; nonce: string; amount: string; pin: string }
+  /**
+   * Optional note, empty string when absent.
+   *
+   * It reaches the chain through Arc's predeployed `Memo` contract, which wraps
+   * the USDC transfer and emits the note as an indexed event (see `./arc`). So
+   * it is *public and permanent*: readable by anyone, editable by no one, and
+   * paid for by the byte — hence the cap in `MEMO_MAX_BYTES`.
+   */
+  | { type: 'SEND_TIP'; nonce: string; amount: string; pin: string; memo: string }

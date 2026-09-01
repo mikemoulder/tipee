@@ -1,6 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { InvalidPinError, PinError } from './crypto'
+
+// Every wallet operation here runs real PBKDF2 at 600k iterations, which is
+// the point — the cost is the security property, so it cannot be mocked away.
+// That puts the file around 4s on its own and past the 5s default when it runs
+// alongside the rest of the suite, which showed up as intermittent failures
+// that passed on a re-run. The budget is raised rather than the work reduced.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 })
 import {
   backoffMs,
   createWalletRecord,

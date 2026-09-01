@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  MEMO_MAX_BYTES,
   MIN_TIP,
   TIP_PRESETS,
+  fitMemo,
   maxTippable,
+  memoByteLength,
   minTipInUnits,
   validateTip,
 } from './limits'
@@ -220,5 +223,43 @@ describe('maxTippable', () => {
   it('rejects negative inputs', () => {
     expect(() => maxTippable(-1n, 0n, min)).toThrow(RangeError)
     expect(() => maxTippable(1n, -1n, min)).toThrow(RangeError)
+  })
+})
+
+describe('memo sizing', () => {
+  it('measures what will actually be written, not what was typed', () => {
+    expect(memoByteLength('thanks')).toBe(6)
+    // One character, four bytes. Counting characters would under-read it by 4x.
+    expect(memoByteLength('🎁')).toBe(4)
+    expect(memoByteLength('謝謝')).toBe(6)
+  })
+
+  it('leaves a memo inside the budget untouched', () => {
+    const memo = 'Great video, thank you.'
+    expect(fitMemo(memo)).toBe(memo)
+  })
+
+  it('trims to the byte budget', () => {
+    expect(memoByteLength(fitMemo('a'.repeat(MEMO_MAX_BYTES + 40)))).toBe(MEMO_MAX_BYTES)
+  })
+
+  it('never cuts a character in half', () => {
+    // 30 four-byte emoji is 120 bytes exactly; 31 overflows by one character,
+    // and slicing the encoded bytes would leave a broken glyph on the end.
+    const overflowing = '🎁'.repeat(31)
+    const fitted = fitMemo(overflowing)
+
+    expect(memoByteLength(fitted)).toBeLessThanOrEqual(MEMO_MAX_BYTES)
+    expect(fitted).toBe('🎁'.repeat(30))
+    expect(fitted).not.toContain('\uFFFD')
+  })
+
+  it('drops whole characters when the budget lands mid-sequence', () => {
+    // A three-byte character straddling the limit has to go entirely.
+    const memo = `${'a'.repeat(MEMO_MAX_BYTES - 1)}謝`
+    const fitted = fitMemo(memo)
+
+    expect(memoByteLength(fitted)).toBe(MEMO_MAX_BYTES - 1)
+    expect(fitted).toBe('a'.repeat(MEMO_MAX_BYTES - 1))
   })
 })

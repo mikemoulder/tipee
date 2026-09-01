@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const BUTTON_ID = 'tipee-tip-button'
+
+const sendMessage = vi.fn()
 
 function setUrl(path: string): void {
   ;(window as unknown as { happyDOM: { setURL(url: string): void } }).happyDOM.setURL(
@@ -66,6 +68,7 @@ function watchActionRow(): Element {
 }
 
 beforeAll(async () => {
+  Object.assign(globalThis, { chrome: { runtime: { sendMessage } } })
   watchVideo('booting00000')
   await import('./content')
 })
@@ -160,6 +163,29 @@ describe('tip button injection', () => {
       .getElementById(BUTTON_ID)
       ?.style.getPropertyValue('--tipee-button-background')
     expect(sampled).toBe(LIKE_BACKGROUND)
+  })
+
+  it('reads the creator afresh on click, not the snapshot from injection', async () => {
+    watchVideo('hhhhhhhhhhh')
+    renderWatchPage()
+    await settle()
+
+    // The button is injected the instant the action row exists, which is a beat
+    // before YouTube fills in the owner avatar. Replaying that snapshot handed
+    // the composer a creator with no picture for the life of the page.
+    const owner = document.querySelector('ytd-video-owner-renderer')
+    const avatar = document.createElement('yt-img-shadow')
+    avatar.id = 'avatar'
+    avatar.innerHTML = '<img src="https://yt3.ggpht.com/abc=s48-c-k-c0x00ffffff-no-rj">'
+    owner?.append(avatar)
+
+    sendMessage.mockClear()
+    document.getElementById(BUTTON_ID)?.click()
+
+    expect(sendMessage).toHaveBeenCalledTimes(1)
+    expect(sendMessage.mock.calls[0]?.[0]?.creator?.avatarUrl).toBe(
+      'https://yt3.ggpht.com/abc=s48-c-k-c0x00ffffff-no-rj',
+    )
   })
 
   it('stays off pages that are not a watch page', async () => {
