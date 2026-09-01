@@ -1,84 +1,74 @@
 # Tipee Handoff
 
 ## Status
-- Date: 2026-08-28
-- Current milestone: Visual extension shell complete; wallet flow next
+- Date: 2026-08-30
+- Current milestone: Extension shell and wallet crypto complete; onboarding UI and composer signing next
 - Overall status: In progress
 
 ## Product Context
 Tipee is a Manifest V3 browser extension for tipping YouTube creators in Arc testnet USDC. Gifter private keys remain encrypted and local to the browser. Creator funds are held in Circle developer-controlled escrow until channel ownership is verified.
 
 ## Repository Facts
-- Root package: `tipee`
-- Workspaces: `packages/*`
-- Shared package: money, limits, YouTube, and fee logic with 131 passing tests.
-- Extension package: `@tipee/extension`, currently only wallet crypto source exists.
-- Root typecheck now includes both `shared` and `extension` project references.
-- Required Node version: 20+
-
-## Known Findings
-- `npm test` passes: 4 files, 131 tests.
-- `npm run typecheck` passes but does not include the extension.
-- Extension Web Crypto inputs now use copied `ArrayBuffer` values at the Web Crypto boundary.
-- The extension now has a minimal MV3 manifest, popup entrypoint, content script, service worker, and Vite configs.
-- `npm run verify-chain` requires `ARC_RPC_URL` in `.env`; `.env.example` exists.
-- The workspace folder is not currently recognized as a Git repository by the terminal.
-
-## Working Decisions
-- Start with a minimal buildable MV3 extension shell before implementing the full UI.
-- Keep wallet crypto behavior unchanged; fix only the type boundary by passing an `ArrayBuffer`-backed view to Web Crypto.
-- Use the existing vanilla TypeScript/Vite direction from the package metadata.
-
-## Next Actions
-1. Add wallet onboarding and local encrypted keystore storage around the existing crypto module.
-2. Replace the composer stub with creator resolution, amount validation, and gas-aware balance state.
-3. Add focused tests for YouTube fixtures, wallet storage, and composer validation.
-4. Run the extension in Chrome against a real YouTube watch page.
-5. Update this handoff after each completed slice with commands and outcomes.
-
-## Completed Slice: Foundation
-- Added `plan.md` and this handoff.
-- Fixed extension Web Crypto typing without changing encryption behavior.
-- Added `packages/extension/index.html`.
-- Added `packages/extension/public/manifest.json`.
-- Added popup, content, and service-worker entrypoints.
-- Added `vite.config.ts` and `vite.config.content.ts`.
-- Added the extension project to root `tsconfig.json` references.
-- Added defensive `ytInitialData` creator extraction in `src/youtube.ts`.
-- Added video-ID keyed button injection and `yt-navigate-finish` handling.
-- Added a dedicated `composer.html` page and service-worker popup lifecycle.
-- Added duplicate popup focusing and cleanup on window close.
-- Added preview styling for the wallet popup and composer.
-- Added working composer amount presets.
-- Replaced the temporary YouTube gift text with an inline gift icon and focus styling.
-
-## Current Limitations
-- The gift button uses a temporary text label; the final UI needs the specified inline gift icon and YouTube-matched styling.
-- The composer displays creator context and an amount field but does not yet resolve a backend creator, estimate gas, request a PIN, or sign a transfer.
-- The parser has no captured YouTube HTML fixtures yet.
-- The UI imports Google Fonts for preview polish; production should decide whether to bundle a font or keep the fallback stack for offline extension use.
-- YouTube extraction now checks the page global, script data, nested `videoOwnerRenderer` navigation URLs, and visible channel links.
-- Button rendering no longer waits for metadata; creator details are retried at click time so delayed YouTube data cannot hide the visual control.
-- Gift button styling now uses YouTube CSS variables, 36px pill geometry, Roboto metrics, scoped hover/focus states, and a lighter outlined gift icon.
-- Gift button polish now matches the 40px action-row pills, uses the 10%-layer surface, and includes a capped 45-second wiggle/light-sweep cue with a dismissible 4-second tooltip.
-- Attention cues are viewport-aware, limited to three per video, reset on SPA navigation, and disabled under `prefers-reduced-motion`.
-- Button and tooltip colors now inherit YouTube theme variables with light-theme fallbacks, and the button is back to a compact 36px action-pill footprint.
-- Fixed disappearing controls after YouTube action-bar rerenders by checking button connectivity before suppressing reinjection.
-- Theme detection now handles transparent body backgrounds and watches both `html` and `body` theme attributes.
-- Added subtle pill elevation with a theme-appropriate shadow.
+- Root package: `tipee`; workspaces `packages/*`; Node 20+.
+- `@tipee/shared`: money, limits, YouTube identity, fee logic. Zero runtime dependencies.
+- `@tipee/extension`: manifest, service worker, content script, popup, composer, wallet crypto and keystore.
+- Root typecheck covers `shared` and `extension` project references.
+- This workspace **is** a git repository, on `main`.
 
 ## Latest Validation
-- `npm test`: passed, 131 tests.
-- `npm run typecheck`: passed, shared + extension + root project references.
-- `npm run build`: passed, extension output generated in `packages/extension/dist/`.
-- `npm run verify-chain`: still requires `ARC_RPC_URL` in `.env`.
-- Latest parser change: `npm run typecheck` passed after adding the nested-owner fallback.
+Run 2026-08-30, all from the repo root:
+- `npm test` — **158 passed**, 6 files.
+- `npx tsc --build` — clean.
+- `npm run build` — extension output written to `packages/extension/dist/`.
+- `npm run verify-chain` — still requires `ARC_RPC_URL` in `.env`. Never yet executed.
+
+## Fixed This Slice: creator misrouting
+
+`scrapeCreator` preferred the inline `ytInitialData` bootstrap script over the live DOM. Three facts combined into a money bug:
+
+1. `window.ytInitialData` is invisible to an MV3 content script (isolated world), so that branch was dead code and always fell through.
+2. The fallback parsed the bootstrap `<script>` out of `document.scripts`. YouTube writes that tag once at page load and never rewrites it during SPA navigation.
+3. `??` short-circuited before the DOM path, the only source that is correct after a navigation.
+
+So after navigating from video A to video B, the tip was attributed to **creator A**. It fired on essentially every tip after the first, since SPA navigation is the normal browsing path; only a hard refresh gave the right answer.
+
+Fixes applied:
+- Live DOM is now the primary source.
+- Bootstrap data is accepted only when `currentVideoEndpoint.watchEndpoint.videoId` matches the video being scraped. Unprovable is treated as wrong — failing closed just means re-scraping on click, whereas failing open pays the wrong person.
+- The dead `window.ytInitialData` branch is gone.
+- The DOM scraper now skips the textless avatar link and takes the channel-name link, and carries the avatar through so the composer keeps its picture.
+
+Covered by `packages/extension/src/youtube.test.ts` (13 tests, happy-dom). Confirmed meaningful: restoring the old precedence fails 3 of them, including the misrouting case.
+
+## Also Fixed
+- **Duplicate PIN validation.** The keystore had its own `pin.length < 6` check that accepted non-digits and had no upper bound, so a PIN it allowed could be refused one call later at encryption. It now calls `assertValidPin` from `wallet/crypto.ts`.
+- **Missing brute-force protection.** Added exponential backoff (3 free attempts, then doubling from 1s, capped at 5 minutes) and opt-in wipe after 10 failures, per idea.md §3.1.1. `unlockWallet` takes an injectable `now`, so the delays are tested without sleeping.
+- **Build output in git.** 32 files under `packages/extension/dist-types/` were tracked; `.gitignore` had `dist/`, which does not match `dist-types`. Added the pattern and untracked them.
+
+## Working Decisions
+- No session key cache — see the *Decisions* section of `plan.md` for why it contradicts PIN-per-tip.
+- Content script scrapes the DOM only; the backend resolves handle to `channelId`.
+- PBKDF2 is interim; record fields `v` and `kdf` exist so it can migrate to scrypt or Argon2id before mainnet.
+- Vanilla TypeScript and Vite, no UI framework, to keep store review simple.
+
+## Next Actions
+1. Onboarding UI: generate, reveal the 12-word phrase, confirm 3 random words, set PIN, offer the wipe opt-in.
+2. Composer: replace the `pin: ''` stub in `src/composer/main.ts` with real PIN entry, creator resolution, gas-aware balance validation, signing, and result states.
+3. Capture real YouTube watch-page HTML fixtures to guard the scraper against layout changes.
+4. Obtain the `.env` values so `npm run verify-chain` can settle `NATIVE_DECIMALS` and the transfer shape.
+5. Load unpacked in Chrome and walk a real watch page end to end.
+
+## Known Gaps
+- Composer shows creator context and an amount field; it does not resolve a backend creator, estimate gas, request a PIN, or sign. `SEND_TIP` currently sends `pin: ''`.
+- No onboarding UI, so `createWalletRecord` returns a mnemonic nothing displays. Seed backup is unreachable by a user.
+- No captured YouTube HTML fixtures; scraper tests use hand-built DOM and bootstrap shapes.
+- `wallet/chain.ts` does not exist — blocked on the chain probe.
+- The UI imports Google Fonts; production should decide between bundling a font and keeping the fallback stack for offline use.
 
 ## Verification Commands
 ```text
 npm test
-npm run typecheck
-npm run typecheck --workspace @tipee/extension
+npx tsc --build
 npm run build
 npm run verify-chain
 ```

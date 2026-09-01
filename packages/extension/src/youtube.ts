@@ -7,8 +7,28 @@ export function currentVideoId(url = window.location.href): string | null {
   return match?.[1] ?? null
 }
 
+/**
+ * Reads the creator of the video currently on screen.
+ *
+ * ## Why the DOM comes first
+ *
+ * YouTube is a single-page app. Navigating from one video to the next swaps the
+ * DOM but leaves the inline `ytInitialData` bootstrap script exactly as it was
+ * written at first page load — YouTube fetches the new video's data over XHR and
+ * never rewrites that tag.
+ *
+ * So the script tag is a snapshot of whichever video the tab opened on, and
+ * trusting it after a navigation attributes the tip to the *previously watched*
+ * creator. Since SPA navigation is how people actually browse YouTube, that
+ * misroutes nearly every tip after the first. The live DOM is the only source
+ * that is correct after a navigation, so it is the one consulted first.
+ *
+ * The bootstrap data is kept only as a fallback for the narrow window where the
+ * content script runs before the owner section has rendered — and even there it
+ * is accepted only if it can be proven to describe this same video.
+ */
 export function scrapeCreator(videoId: string, root?: unknown): ScrapedCreator | null {
-  const candidate = findCreator(root ?? readInitialData()) ?? creatorFromDom()
+  const candidate = creatorFromDom() ?? findCreator(initialDataFor(videoId, root))
   if (!candidate) return null
 
   const handle = normalizeHandle(candidate.vanityChannelUrl ?? candidate.canonicalBaseUrl ?? '')
@@ -22,11 +42,44 @@ export function scrapeCreator(videoId: string, root?: unknown): ScrapedCreator |
   }
 }
 
-function readInitialData(): unknown {
-  const page = window as typeof window & { ytInitialData?: unknown }
-  if (page.ytInitialData) return page.ytInitialData
+/**
+ * Returns the bootstrap blob only when it demonstrably describes `videoId`.
+ *
+ * Unprovable is treated as wrong. Failing closed costs nothing — the caller
+ * re-scrapes when the button is clicked, by which point the DOM has rendered —
+ * whereas failing open routes money to the wrong channel.
+ */
+function initialDataFor(videoId: string, root?: unknown): unknown {
+  const data = root ?? readInitialData()
+  return initialDataVideoId(data) === videoId ? data : null
+}
 
-  const script = Array.from(document.scripts).find((item) => item.textContent?.includes('ytInitialData'))
+/**
+ * The video a bootstrap blob was generated for, via `currentVideoEndpoint`.
+ * A plain search for any `videoId` key would match the recommendations rail, so
+ * only this one specific path counts.
+ */
+function initialDataVideoId(data: unknown): string | null {
+  const endpoint = readObject(readObject(data)?.currentVideoEndpoint)
+  const watch = readObject(endpoint?.watchEndpoint)
+  const id = watch?.videoId
+  return typeof id === 'string' ? id : null
+}
+
+function readObject(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null
+}
+
+/**
+ * `window.ytInitialData` is deliberately not consulted. MV3 content scripts run
+ * in an isolated world with their own `window`, so the page's global is never
+ * visible here — reading it would be dead code that silently always misses.
+ * The inline script's text, on the other hand, is DOM, and DOM we can read.
+ */
+function readInitialData(): unknown {
+  const script = Array.from(document.scripts).find((item) =>
+    item.textContent?.includes('ytInitialData'),
+  )
   const source = script?.textContent
   if (!source) return null
 
@@ -48,15 +101,38 @@ interface CreatorCandidate {
   avatar?: { thumbnails?: Array<{ url?: string }> }
 }
 
+/**
+ * Reads the owner section of the watch page. This is the authoritative source
+ * after a SPA navigation, so it also has to supply the avatar — otherwise the
+ * composer would lose the profile picture on every navigated-to video.
+ */
 function creatorFromDom(): CreatorCandidate | null {
-  const link = document.querySelector<HTMLAnchorElement>(
-    'ytd-video-owner-renderer a[href*="/@"], ytd-channel-name a, #owner a[href*="/@"]',
-  )
-  const handleUrl = link?.href ?? ''
-  const title = link?.textContent?.trim()
-  if (!title || !normalizeHandle(handleUrl)) return null
+  const owner =
+    document.querySelector('ytd-video-owner-renderer') ??
+    document.querySelector('#owner') ??
+    document
 
-  return { title, canonicalBaseUrl: handleUrl }
+  // The owner section holds two links to the same channel: the avatar (first in
+  // document order, no text) and the channel name. Taking whichever matches
+  // first would yield the avatar and an empty display name, so scan for the
+  // first link that carries both a usable handle and visible text.
+  const link = Array.from(
+    owner.querySelectorAll<HTMLAnchorElement>(
+      'a[href*="/@"], ytd-channel-name a, #channel-name a',
+    ),
+  ).find((anchor) => anchor.textContent?.trim() && normalizeHandle(anchor.href))
+
+  const title = link?.textContent?.trim()
+  if (!link || !title) return null
+
+  const avatar = owner.querySelector<HTMLImageElement>('#avatar img, img#img, yt-img-shadow img')
+  const avatarUrl = avatar?.src
+
+  return {
+    title,
+    canonicalBaseUrl: link.href,
+    ...(avatarUrl ? { avatar: { thumbnails: [{ url: avatarUrl }] } } : {}),
+  }
 }
 
 function findCreator(value: unknown): CreatorCandidate | null {
@@ -73,7 +149,8 @@ function findCreator(value: unknown): CreatorCandidate | null {
   const candidate = record as CreatorCandidate
   if (
     typeof candidate.channelId === 'string' &&
-    (typeof candidate.vanityChannelUrl === 'string' || typeof candidate.canonicalBaseUrl === 'string') &&
+    (typeof candidate.vanityChannelUrl === 'string' ||
+      typeof candidate.canonicalBaseUrl === 'string') &&
     typeof candidate.title === 'string'
   ) {
     return candidate
@@ -109,7 +186,9 @@ function textValue(value: unknown): string | null {
   const record = value as Record<string, unknown>
   if (Array.isArray(record.runs)) {
     const text = record.runs
-      .map((run) => (typeof run === 'object' && run !== null ? (run as Record<string, unknown>).text : null))
+      .map((run) =>
+        typeof run === 'object' && run !== null ? (run as Record<string, unknown>).text : null,
+      )
       .filter((item): item is string => typeof item === 'string')
       .join('')
     return text || null
