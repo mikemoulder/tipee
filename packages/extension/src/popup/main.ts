@@ -1,9 +1,10 @@
 import { MIN_TIP, formatUsdc, tryParseUsdc, validateTip } from '@tipee/shared'
 
 import './styles.css'
-import { ARC_LOGO, arcMark } from '../brand/arc-mark'
-import { ActivityUnavailableError, recentMovements, type Movement } from '../chain/activity'
-import { arcPublicClient, arcWalletClient, usdcBalance } from '../chain/arc'
+import { ARC_LOGO, arcBadge, arcMark } from '../brand/arc-mark'
+import { ActivityUnavailableError, walletActivity, type ActivityReport, type Movement } from '../chain/activity'
+import { tipLabels, type TipRecord } from '../chain/journal'
+import { ARC_BLOCK_SECONDS, arcPublicClient, arcWalletClient, usdcBalance } from '../chain/arc'
 import { buildTipCall } from '../chain/tip'
 import {
   WalletLockedError,
@@ -27,6 +28,11 @@ const ICON = {
   back: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>',
   copy: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>',
   close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  refresh:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 11a8.5 8.5 0 1 0-.9 4.7"/><path d="M20.5 5.5v6h-6"/></svg>',
+  clock: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+  alert:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5 2.8 20h18.4L12 4.5Z"/><path d="M12 10.5v3.5"/><path d="M12 17h.01"/></svg>',
 }
 
 /* Screens ---------------------------------------------------------------- */
@@ -45,7 +51,10 @@ function chrome_(): string {
   return `
     <header class="bar">
       <span class="wordmark">tipee</span>
-      <button class="icon-button" id="settings" type="button" aria-label="Settings">${ICON.gear}</button>
+      <span class="bar-actions">
+        ${arcBadge()}
+        <button class="icon-button" id="settings" type="button" aria-label="Settings">${ICON.gear}</button>
+      </span>
     </header>`
 }
 
@@ -68,10 +77,16 @@ function renderHome(address: `0x${string}`): void {
 
   host.innerHTML = `
     ${chrome_()}
+
     <section class="holding">
       <p class="holding-label">Balance</p>
-      <p class="holding-value" id="balance">—</p>
-      <p class="holding-sub" id="balance-sub">${arcMark()}</p>
+      <p class="holding-value" id="balance">$<span class="pending">—</span></p>
+      <div class="holding-meta">
+        <button class="chip-button" id="copy-address" type="button" aria-label="Copy wallet address">
+          <span id="copy-address-label">${escapeHtml(shorten(address))}</span>${ICON.copy}
+        </button>
+      </div>
+      <p class="holding-note" id="balance-note"></p>
     </section>
 
     <nav class="actions">
@@ -86,65 +101,211 @@ function renderHome(address: `0x${string}`): void {
     </nav>
 
     <section class="activity">
-      <p class="section-label">Activity</p>
-      <div id="activity-list"><p class="muted-line">Loading…</p></div>
+      <div class="section-head">
+        <p class="section-label">Activity</p>
+        <span class="section-note" id="activity-window"></span>
+        <button class="icon-button small" id="refresh" type="button" aria-label="Refresh activity">${ICON.refresh}</button>
+      </div>
+      <div class="activity-list" id="activity-list">${skeletonRows()}</div>
     </section>
   `
 
   document.querySelector('#settings')?.addEventListener('click', () => renderSettings(address))
   document.querySelector('#deposit')?.addEventListener('click', () => renderDeposit(address))
   document.querySelector('#withdraw')?.addEventListener('click', () => renderWithdraw(address))
+  document.querySelector('#copy-address')?.addEventListener('click', () => void copyAddress(address))
+  document.querySelector('#refresh')?.addEventListener('click', () => refreshHome(address))
 
+  refreshHome(address)
+}
+
+function refreshHome(address: `0x${string}`): void {
+  const list = document.querySelector<HTMLElement>('#activity-list')
+  if (list) list.innerHTML = skeletonRows()
   void loadBalance(address)
   void loadActivity(address)
 }
 
+/** The address is the one thing on this screen worth putting on a clipboard. */
+async function copyAddress(address: `0x${string}`): Promise<void> {
+  const label = document.querySelector<HTMLElement>('#copy-address-label')
+  if (!label) return
+
+  try {
+    await navigator.clipboard.writeText(address)
+    label.textContent = 'Copied'
+  } catch {
+    label.textContent = 'Copy failed'
+  }
+  window.setTimeout(() => (label.textContent = shorten(address)), 1_500)
+}
+
 async function loadBalance(address: `0x${string}`): Promise<void> {
   const value = document.querySelector<HTMLElement>('#balance')
+  const note = document.querySelector<HTMLElement>('#balance-note')
   if (!value) return
+
   try {
     const balance = await usdcBalance(arcPublicClient(), address)
     // USDC is dollar-denominated, so the big number is shown in dollars — but
     // this is testnet, which the chip underneath never stops saying.
     value.textContent = `$${formatUsdc(balance)}`
     value.dataset.raw = formatUsdc(balance)
+    if (note) {
+      note.textContent = ''
+      note.classList.remove('note-warn')
+    }
   } catch {
-    value.textContent = '—'
-    const sub = document.querySelector<HTMLElement>('#balance-sub')
-    if (sub) sub.innerHTML = `${arcMark()}<span class="muted-line"> · balance unavailable</span>`
+    // Never a zero here. A balance that could not be read and a balance that is
+    // empty are the same picture and opposite facts, and one of them sends
+    // someone off to top up money they already have.
+    value.innerHTML = '$<span class="pending">—</span>'
+    if (note) {
+      note.textContent = 'Arc did not answer — balance unknown.'
+      note.classList.add('note-warn')
+    }
   }
 }
 
 async function loadActivity(address: `0x${string}`): Promise<void> {
   const list = document.querySelector<HTMLElement>('#activity-list')
+  const covered = document.querySelector<HTMLElement>('#activity-window')
   if (!list) return
 
   try {
-    const movements = await recentMovements(arcPublicClient(), address)
-    if (movements.length === 0) {
-      list.innerHTML = '<p class="muted-line">Nothing yet. Tips you send will show up here.</p>'
+    const [report, labels] = await Promise.all([
+      walletActivity(arcPublicClient(), address),
+      tipLabels(),
+    ])
+    if (covered) covered.textContent = coverageNote(report)
+
+    if (report.movements.length === 0) {
+      list.innerHTML = emptyState(ICON.clock, 'Nothing yet', 'Tips you send show up here, newest first.')
       return
     }
-    list.innerHTML = movements.map(movementRow).join('')
+
+    list.innerHTML = report.movements
+      .map((movement) => {
+        const tip =
+          labels.byHash.get(movement.txHash.toLowerCase()) ??
+          labels.byRecipient.get(movement.counterparty.toLowerCase())
+        return movementRow(movement, report.head, movement.outgoing ? tip : undefined)
+      })
+      .join('')
   } catch (error) {
     // Never an empty list here: "you have sent nothing" and "we could not find
     // out" look the same on screen and mean opposite things.
-    list.innerHTML = `<p class="muted-line">${
-      error instanceof ActivityUnavailableError ? 'Could not read activity from Arc.' : 'Activity unavailable.'
-    }</p>`
+    if (covered) covered.textContent = ''
+    list.innerHTML = emptyState(
+      ICON.alert,
+      error instanceof ActivityUnavailableError ? 'Could not reach Arc' : 'Activity unavailable',
+      'The network did not answer. Your balance and wallet are unaffected.',
+      true,
+    )
+    document.querySelector('#retry')?.addEventListener('click', () => {
+      list.innerHTML = skeletonRows()
+      void loadActivity(address)
+    })
   }
 }
 
-function movementRow(movement: Movement): string {
-  const sign = movement.outgoing ? '−' : '+'
+/** Placeholder rows, so the list does not jump when the real ones land. */
+function skeletonRows(count = 3): string {
+  return Array.from({ length: count }, () => '<div class="movement skeleton" aria-hidden="true"></div>').join('')
+}
+
+/** An empty or failed list, given the same footprint as a full one. */
+function emptyState(icon: string, title: string, detail: string, retry = false): string {
+  return `
+    <div class="state">
+      <span class="state-icon">${icon}</span>
+      <p class="state-title">${escapeHtml(title)}</p>
+      <p class="state-detail">${escapeHtml(detail)}</p>
+      ${retry ? '<button class="ghost" id="retry" type="button"><span>Try again</span></button>' : ''}
+    </div>`
+}
+
+/**
+ * How much history the list actually covers.
+ *
+ * The explorer returns all of it; the log scan behind it reaches back about a
+ * day, less when an RPC cuts it short. Saying which one is on screen is the
+ * difference between an old tip that is out of range and an old tip that never
+ * happened.
+ */
+export function coverageNote(report: Pick<ActivityReport, 'source' | 'scannedBlocks' | 'partial'>): string {
+  if (report.source === 'explorer') return 'all time'
+  if (report.scannedBlocks === undefined) return ''
+
+  const span = duration(Number(report.scannedBlocks) * ARC_BLOCK_SECONDS)
+  return report.partial ? `last ~${span} · cut short` : `last ~${span}`
+}
+
+/** A row's age: measured when the source knew it, estimated when it did not. */
+export function ageOf(movement: Movement, head?: bigint, now: Date = new Date()): string {
+  if (movement.at) {
+    const seconds = (now.getTime() - movement.at.getTime()) / 1_000
+    return seconds < 90 ? 'just now' : `${duration(seconds)} ago`
+  }
+
+  if (head === undefined) return ''
+  return ageFromBlocks(head > movement.blockNumber ? head - movement.blockNumber : 0n)
+}
+
+/**
+ * Block distance as a rough age. Derived from Arc's average block time rather
+ * than from timestamps: a timestamp per row is one more RPC call per row, on
+ * endpoints that already rate-limit the two this screen makes. Everywhere it
+ * surfaces carries a `~`.
+ */
+export function ageFromBlocks(blocks: bigint): string {
+  const seconds = Number(blocks) * ARC_BLOCK_SECONDS
+  return seconds < 90 ? 'just now' : `~${duration(seconds)} ago`
+}
+
+function duration(seconds: number): string {
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) return `${Math.max(minutes, 1)}m`
+  const hours = Math.round(minutes / 60)
+  if (hours < 48) return `${hours}h`
+  return `${Math.round(hours / 24)}d`
+}
+
+/**
+ * What a row says it is.
+ *
+ * A transfer log carries an address and an amount, and an escrow address is
+ * deliberately anonymous on-chain — so a tip only reads as a tip because this
+ * wallet noted whose escrow it paid. Without that note it is still an honest
+ * row, just an unnamed one; it is never guessed at from the address alone.
+ */
+export function movementLabel(
+  movement: Movement,
+  tip?: Pick<TipRecord, 'handle' | 'displayName'>,
+): { title: string; sub: string } {
+  if (movement.outgoing && tip) {
+    return { title: `Tipped ${tip.handle}`, sub: tip.displayName || shorten(movement.counterparty) }
+  }
+
+  return {
+    title: movement.outgoing ? 'Sent' : 'Received',
+    sub: shorten(movement.counterparty),
+  }
+}
+
+function movementRow(movement: Movement, head?: bigint, tip?: TipRecord): string {
+  const age = ageOf(movement, head)
+  const { title, sub } = movementLabel(movement, tip)
+  const direction = movement.outgoing ? 'out' : 'in'
+
   return `
     <div class="movement">
-      <span class="movement-icon ${movement.outgoing ? 'out' : 'in'}">${movement.outgoing ? ICON.up : ICON.down}</span>
+      <span class="movement-icon ${direction}">${movement.outgoing ? ICON.up : ICON.down}</span>
       <span class="movement-copy">
-        <span class="movement-title">${movement.outgoing ? 'Sent' : 'Received'}</span>
-        <span class="movement-sub">${escapeHtml(shorten(movement.counterparty))}</span>
+        <span class="movement-title">${escapeHtml(title)}</span>
+        <span class="movement-sub">${escapeHtml(sub)}${age ? ` · ${escapeHtml(age)}` : ''}</span>
       </span>
-      <span class="movement-amount ${movement.outgoing ? 'out' : 'in'}">${sign}${formatUsdc(movement.amount)}</span>
+      <span class="movement-amount ${direction}">${movement.outgoing ? '−' : '+'}${formatUsdc(movement.amount)}</span>
     </div>`
 }
 
@@ -374,7 +535,6 @@ function renderWelcome(): void {
     <section class="holding">
       <p class="holding-label">Balance</p>
       <p class="holding-value">$0.00</p>
-      <p class="holding-sub">${arcMark()}</p>
     </section>
     <section class="form">
       <p class="muted-line">Tipee keeps a wallet in this browser, encrypted with a PIN. The keys never leave it.</p>
@@ -444,7 +604,107 @@ function renderSeedReveal(address: `0x${string}`, mnemonic: string): void {
   confirm?.addEventListener('change', () => {
     if (continueButton) continueButton.disabled = !confirm.checked
   })
-  continueButton?.addEventListener('click', () => renderHome(address))
+  continueButton?.addEventListener('click', () => renderSeedCheck(address, mnemonic))
+}
+
+/**
+ * Three words back, before the wallet is ever used.
+ *
+ * A checkbox records an intention; it does not establish that the phrase was
+ * written down, or written down correctly. This wallet is the only copy of the
+ * key — nothing is escrowed and no reset exists — so a phrase that was never
+ * really captured is a total loss the owner discovers months later, on the one
+ * day they need it. Asking here costs seconds while the words are still on
+ * screen behind a back link.
+ */
+function renderSeedCheck(address: `0x${string}`, mnemonic: string): void {
+  const host = app()
+  if (!host) return
+
+  const words = seedWords(mnemonic)
+  const indexes = pickCheckIndexes(words.length)
+
+  host.innerHTML = `
+    ${backBar('Confirm your backup')}
+    <section class="form">
+      <p class="muted-line">Type these words from the phrase you just wrote down.</p>
+      ${indexes
+        .map(
+          (index, slot) => `
+      <label for="check-${slot}">Word ${index + 1}</label>
+      <input id="check-${slot}" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" />`,
+        )
+        .join('')}
+      <p class="error" id="check-error"></p>
+      <div class="bracket"><button class="primary" id="check-seed" type="button">Confirm</button></div>
+      <button class="ghost" id="show-phrase" type="button">Show the phrase again</button>
+    </section>
+  `
+
+  const showAgain = (): void => renderSeedReveal(address, mnemonic)
+  document.querySelector('#back')?.addEventListener('click', showAgain)
+  document.querySelector('#show-phrase')?.addEventListener('click', showAgain)
+
+  document.querySelector('#check-seed')?.addEventListener('click', () => {
+    const answers = indexes.map((index, slot) => ({
+      index,
+      word: document.querySelector<HTMLInputElement>(`#check-${slot}`)?.value ?? '',
+    }))
+
+    if (!seedWordsMatch(mnemonic, answers)) {
+      const error = document.querySelector<HTMLElement>('#check-error')
+      if (error) error.textContent = 'Those do not match. Check the phrase you wrote down.'
+      return
+    }
+
+    renderHome(address)
+  })
+}
+
+/** The phrase as words, however it was spaced. */
+function seedWords(mnemonic: string): string[] {
+  return mnemonic.trim().split(/\s+/)
+}
+
+/**
+ * Which positions to ask for. Drawn fresh each time so a retry after a failed
+ * check asks a different trio — otherwise the same three words could be copied
+ * off the reveal screen and typed back, which tests nothing.
+ */
+export function pickCheckIndexes(total: number, count = 3, random = randomFraction): number[] {
+  const pool = Array.from({ length: total }, (_, index) => index)
+  const picked: number[] = []
+
+  while (picked.length < Math.min(count, total)) {
+    picked.push(...pool.splice(Math.floor(random() * pool.length), 1))
+  }
+
+  return picked.sort((left, right) => left - right)
+}
+
+function randomFraction(): number {
+  const buffer = new Uint32Array(1)
+  crypto.getRandomValues(buffer)
+  return (buffer[0] ?? 0) / 2 ** 32
+}
+
+/**
+ * Compares answers the way a person writes them down: trimmed and any case.
+ * BIP-39 words are lowercase ASCII, so nothing legitimate is lost by folding
+ * case, and rejecting `Abandon` would only teach the owner to distrust a backup
+ * that is in fact correct.
+ */
+export function seedWordsMatch(
+  mnemonic: string,
+  answers: ReadonlyArray<{ index: number; word: string }>,
+): boolean {
+  const words = seedWords(mnemonic)
+  if (answers.length === 0) return false
+
+  return answers.every(({ index, word }) => {
+    const expected = words[index]
+    return expected !== undefined && word.trim().toLowerCase() === expected
+  })
 }
 
 /* Shared ----------------------------------------------------------------- */

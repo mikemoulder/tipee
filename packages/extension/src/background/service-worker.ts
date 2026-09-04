@@ -11,6 +11,7 @@ import { mnemonicToAccount } from 'viem/accounts'
 
 import { arcPublicClient, arcWalletClient, usdcBalance } from '../chain/arc'
 import { EscrowUnavailableError, resolveEscrowAddress } from '../chain/creators'
+import { recordTip } from '../chain/journal'
 import { buildTipCall } from '../chain/tip'
 import { WalletLockedError, WalletWipedError, getWalletAddress, unlockWallet } from '../wallet/keystore'
 
@@ -195,6 +196,18 @@ async function sendTip(message: Extract<ExtensionMessage, { type: 'SEND_TIP' }>)
       to: call.to,
       data: call.data,
     })
+
+    // Who this paid, so the wallet can say "Tipped @creator" later. The chain
+    // knows the transfer; only this side knows whose escrow that address is.
+    await recordTip({
+      txHash,
+      handle: pendingCreator.handle,
+      displayName: pendingCreator.displayName,
+      recipient,
+      amount: amount.toString(),
+      at: Date.now(),
+    })
+
     return { ok: true, txHash }
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : 'The tip could not be sent.' }

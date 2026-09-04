@@ -14,3 +14,15 @@ export const ARC_LOGO = arcLogo
 export function arcMark(): string {
   return `<span class="arc-chip"><img class="arc-mark" src="${arcLogo}" alt="" />Arc testnet</span>`
 }
+
+/**
+ * The mark alone, for the top bar.
+ *
+ * The chip spells the network out; this does not, so the label carries it for
+ * both a screen reader and a pointer. Every screen where the network decides
+ * what happens to money — deposit, withdraw, the composer — still says "Arc
+ * testnet" in words rather than relying on this.
+ */
+export function arcBadge(): string {
+  return `<span class="arc-badge" role="img" aria-label="Arc testnet" title="Arc testnet"><img class="arc-mark" src="${arcLogo}" alt="" /></span>`
+}

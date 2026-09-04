@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, http } from 'viem'
+import { createPublicClient, createWalletClient, fallback, http } from 'viem'
 import type { Account, PublicClient, WalletClient } from 'viem'
 import { arcTestnet } from 'viem/chains'
 
@@ -50,12 +50,33 @@ export const ERC20_ABI = [
   },
 ] as const
 
+/**
+ * Roughly how long an Arc block takes, measured over 10,000 testnet blocks.
+ *
+ * Used only to say *about* how far back a screen is looking. Nothing is spent
+ * or validated against it, and every place it surfaces says "~", because it is
+ * an average and a chain is free to disagree with its own average.
+ */
+export const ARC_BLOCK_SECONDS = 0.52
+
+/**
+ * Every public Arc endpoint, tried in turn.
+ *
+ * The public RPCs rate-limit hard — a burst of `eth_getLogs` gets refused after
+ * a handful of calls — and the three endpoints meter separately. Falling
+ * through to the next one turns a refusal that would have emptied the activity
+ * list into a slower answer.
+ */
+function arcTransport() {
+  return fallback(ARC_CHAIN.rpcUrls.default.http.map((url) => http(url)))
+}
+
 export function arcPublicClient(): PublicClient {
-  return createPublicClient({ chain: ARC_CHAIN, transport: http() })
+  return createPublicClient({ chain: ARC_CHAIN, transport: arcTransport() })
 }
 
 export function arcWalletClient(account: Account): WalletClient {
-  return createWalletClient({ account, chain: ARC_CHAIN, transport: http() })
+  return createWalletClient({ account, chain: ARC_CHAIN, transport: arcTransport() })
 }
 
 /**

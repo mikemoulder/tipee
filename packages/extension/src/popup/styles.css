@@ -41,6 +41,11 @@ main { display: flex; flex-direction: column; gap: 16px; min-height: 540px; padd
 .bar-title { font-family: var(--display); font-size: 15px; font-weight: 500; letter-spacing: -0.01em; }
 /* Balances the back button so the title sits centred. */
 .bar-spacer { width: 32px; }
+.bar-actions { display: flex; align-items: center; gap: 8px; }
+
+/* The network, stated by its mark up here and in words wherever money moves. */
+.arc-badge { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--rule); border-radius: 50%; background: var(--card); }
+.arc-badge .arc-mark { width: 15px; height: 15px; }
 
 .icon-button {
   display: grid;
@@ -55,6 +60,8 @@ main { display: flex; flex-direction: column; gap: 16px; min-height: 540px; padd
   transition: color 120ms ease, border-color 120ms ease;
 }
 .icon-button:hover { color: var(--ink); border-color: var(--faint); }
+.icon-button.small { width: 26px; height: 26px; }
+.icon-button.small svg { width: 13px; height: 13px; }
 .icon-button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
 
 /* Holding ---------------------------------------------------------------- */
@@ -63,6 +70,28 @@ main { display: flex; flex-direction: column; gap: 16px; min-height: 540px; padd
 .holding-label { margin: 0; color: var(--faint); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; }
 .holding-value { margin: 0; font-family: var(--display); font-size: 42px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.05; }
 .holding-sub { margin: 0; }
+.holding-meta { display: flex; align-items: center; justify-content: center; gap: 6px; }
+.holding-note { min-height: 13px; margin: 0; color: var(--faint); font-size: 10px; }
+.holding-note.note-warn { color: var(--danger); }
+/* A figure that is not known yet, kept visibly distinct from one that is. */
+.pending { color: var(--faint); }
+
+.chip-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 4px 10px;
+  cursor: pointer;
+  color: var(--muted);
+  background: var(--card);
+  font: 400 10px var(--mono);
+  letter-spacing: 0.04em;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+.chip-button:hover { color: var(--ink); border-color: var(--faint); }
+.chip-button svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
 
 .arc-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--rule); border-radius: 999px; padding: 4px 10px; background: var(--card); color: var(--muted); font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; }
 .arc-chip-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--forest); }
@@ -89,19 +118,49 @@ main { display: flex; flex-direction: column; gap: 16px; min-height: 540px; padd
 /* Activity --------------------------------------------------------------- */
 
 .section-label { margin: 0; color: var(--faint); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; }
-.activity { display: flex; flex-direction: column; gap: 8px; }
+.section-head { display: flex; align-items: center; gap: 8px; }
+.section-note { margin-left: auto; color: var(--faint); font-size: 9.5px; letter-spacing: 0.06em; }
+.activity { display: flex; flex: 1; flex-direction: column; gap: 10px; }
+.activity-list { display: flex; flex: 1; flex-direction: column; gap: 6px; }
 .muted-line { margin: 0; color: var(--faint); font-size: 10.5px; line-height: 1.6; }
 
 .movement { display: flex; align-items: center; gap: 10px; border: 1px solid var(--rule); border-radius: 3px; padding: 10px 12px; background: var(--card); }
-.movement + .movement { margin-top: 6px; }
 .movement-icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--sage); color: var(--muted); }
 .movement-icon.in { background: var(--mint); color: var(--forest); }
 .movement-icon svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; }
 .movement-copy { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
 .movement-title { font-size: 11.5px; font-weight: 500; }
 .movement-sub { color: var(--faint); font-size: 10px; }
-.movement-amount { font-size: 12px; font-weight: 500; }
+.movement-amount { font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.movement-amount.out { color: var(--muted); }
 .movement-amount.in { color: var(--forest); }
+
+/* States ---------------------------------------------------------------- */
+
+.movement.skeleton {
+  height: 50px;
+  background: linear-gradient(90deg, var(--card) 25%, #f5f7f2 50%, var(--card) 75%) 0 0 / 280% 100%;
+  animation: sheen 1.3s ease-in-out infinite;
+}
+@keyframes sheen { to { background-position: -280% 0; } }
+
+.state {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px dashed var(--rule);
+  border-radius: 4px;
+  padding: 24px 18px;
+  text-align: center;
+}
+.state-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; color: var(--faint); background: var(--card); }
+.state-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+.state-title { margin: 0; font-family: var(--display); font-size: 13px; font-weight: 500; }
+.state-detail { max-width: 26ch; margin: 0; color: var(--faint); font-size: 10.5px; line-height: 1.6; }
+.state .ghost { margin-top: 2px; }
 
 /* Deposit ---------------------------------------------------------------- */
 
@@ -208,5 +267,5 @@ main { display: flex; flex-direction: column; gap: 16px; min-height: 540px; padd
 :focus-visible { outline: 2px solid var(--forest); outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
-  * { transition: none !important; }
+  * { transition: none !important; animation: none !important; }
 }
