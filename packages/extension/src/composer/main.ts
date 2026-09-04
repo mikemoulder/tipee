@@ -232,10 +232,18 @@ function askForPin(amount: string, memo: string): void {
   if (!footer) return
   document.body.classList.add('is-signing')
 
+  // A wallet unlocked for this session signs on confirmation. Showing a PIN box
+  // that nothing checks would teach people the box means nothing.
+  const needsPin = context?.needsPin !== false
+
   footer.innerHTML = `
     <p class="signing-summary">${escapeHtml(amount)} USDC${memo ? ' · with a note' : ''}</p>
-    <label class="pin-label" for="pin">Enter your PIN to sign</label>
-    <input id="pin" type="password" inputmode="numeric" autocomplete="off" />
+    ${
+      needsPin
+        ? `<label class="pin-label" for="pin">Enter your PIN to sign</label>
+    <input id="pin" type="password" inputmode="numeric" autocomplete="off" />`
+        : '<p class="pin-label">Confirm to send</p>'
+    }
     <p class="error" id="pin-error"></p>
     <div class="bracket"><button class="primary" id="confirm" type="button">Send ${escapeHtml(amount)} USDC</button></div>
     <button class="link" id="cancel" type="button">Back</button>
@@ -250,12 +258,15 @@ function askForPin(amount: string, memo: string): void {
   })
 
   const submit = (): void => {
-    if (!pin || !confirm) return
-    if (pin.value === '') {
-      if (error) error.textContent = 'Enter your PIN.'
-      return
+    if (!confirm) return
+    if (needsPin) {
+      if (!pin) return
+      if (pin.value === '') {
+        if (error) error.textContent = 'Enter your PIN.'
+        return
+      }
     }
-    void signTip(amount, memo, pin.value)
+    void signTip(amount, memo, pin?.value ?? '')
   }
 
   confirm?.addEventListener('click', submit)

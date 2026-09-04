@@ -55,8 +55,8 @@ function sendWithPin(amount: string, pin = '123456'): void {
   confirmButton()?.click()
 }
 
-function contextOf(balance: string | null, gasCost: string | null): ComposerContext {
-  return { walletAddress: '0xabc', balance, gasCost, recipient: '0xdef', problem: null }
+function contextOf(balance: string | null, gasCost: string | null, needsPin = true): ComposerContext {
+  return { walletAddress: '0xabc', balance, gasCost, recipient: '0xdef', problem: null, needsPin }
 }
 
 function typeMemo(value: string): void {
@@ -310,5 +310,45 @@ describe('composer', () => {
 
     expect(document.querySelector('#app img')).toBeNull()
     expect(document.querySelector('.name')?.textContent).toBe('<img src=x onerror=alert(1)>')
+  })
+})
+
+describe('a wallet that is already unlocked', () => {
+  const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
+
+  function answerWith(needsPin: boolean): void {
+    sendMessage.mockClear()
+    sendMessage.mockImplementation(async (message: { type: string }) =>
+      message?.type === 'GET_COMPOSER_CONTEXT'
+        ? contextOf('5.00', '0.01', needsPin)
+        : { ok: true, txHash: '0xfeed' },
+    )
+  }
+
+  it('confirms the tip without asking for a PIN again', async () => {
+    answerWith(false)
+    render(CREATOR)
+    await settle()
+
+    type('2')
+    sendButton()?.click()
+
+    expect(pinField()).toBeNull()
+    confirmButton()?.click()
+    await settle()
+
+    expect(tipsSent()[0]?.pin).toBe('')
+  })
+
+  it('still asks when the worker says the wallet is locked', async () => {
+    // The PIN box appears only when something will actually check it.
+    answerWith(true)
+    render(CREATOR)
+    await settle()
+
+    type('2')
+    sendButton()?.click()
+
+    expect(pinField()).not.toBeNull()
   })
 })

@@ -120,6 +120,14 @@ export interface ComposerContext {
   recipient: string | null
   /** Why the above is incomplete. Terse, safe to show as-is. */
   problem: string | null
+  /**
+   * Whether signing still needs a PIN.
+   *
+   * False when the wallet is already open for this browsing session. The
+   * composer asks for one only when it would actually be checked — a PIN box
+   * that accepts anything teaches people the box means nothing.
+   */
+  needsPin: boolean
 }
 
 /** The end of a tip. A failure never leaves a hash behind. */

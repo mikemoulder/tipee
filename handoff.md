@@ -58,7 +58,7 @@ A log scan can only ever show a recent window, because the ceiling is per query 
 
 The third party is confined to display. It never sees a key, it cannot move money, and every row is re-checked against the USDC contract address and 6 decimals before it is rendered, because a row for another token drawn with USDC's decimals is a 10^12 error in something a person reads as dollars. Rows whose address, hash, or amount do not parse are dropped rather than guessed at.
 
-The popup says which source answered — "all time" for the explorer, "last ~22h" (or "· cut short") for the scan — because an old tip that is out of range and an old tip that never happened otherwise look identical. Explorer rows show a measured age ("3h ago"); scanned rows show an estimate from block distance, marked "~4h ago".
+The popup captions the list only when it is not the whole history: nothing when the explorer answered, "last ~22h" (or "· cut short") when the scan did — because an old tip that is out of range and an old tip that never happened otherwise look identical. Explorer rows show a measured age ("3h ago"); scanned rows show an estimate from block distance, marked "~4h ago".
 
 ## Also This Slice: home screen structure
 - The Arc mark sits in the top bar beside the gear; the balance carries a copyable address chip instead of a network chip. The mark is labelled "Arc testnet" for pointer and screen reader, and every screen where the network decides what happens to money — deposit, withdraw, composer — still says it in words.

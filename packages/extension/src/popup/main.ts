@@ -1,11 +1,18 @@
-import { MIN_TIP, formatUsdc, tryParseUsdc, validateTip } from '@tipee/shared'
+import { formatUsdc, tryParseUsdc } from '@tipee/shared'
 
 import './styles.css'
 import { ARC_LOGO, arcBadge, arcMark } from '../brand/arc-mark'
 import { ActivityUnavailableError, walletActivity, type ActivityReport, type Movement } from '../chain/activity'
 import { tipLabels, type TipRecord } from '../chain/journal'
 import { ARC_BLOCK_SECONDS, arcPublicClient, arcWalletClient, usdcBalance } from '../chain/arc'
-import { buildTipCall } from '../chain/tip'
+import { ARC_EXPLORER } from '../chain/explorer'
+import {
+  InsufficientFundsError,
+  SendUnavailableError,
+  maxSendable,
+  previewSend,
+  type SendPreview,
+} from '../chain/simulate'
 import {
   WalletLockedError,
   WalletWipedError,
@@ -14,8 +21,18 @@ import {
   hasWallet,
   unlockWallet,
 } from '../wallet/keystore'
+import {
+  UNLOCK_POLICIES,
+  isUnlocked,
+  lock,
+  sessionMnemonic,
+  setUnlockPolicy,
+  unlock,
+  unlockPolicy,
+  type UnlockPolicy,
+} from '../wallet/session'
 import { mnemonicToAccount } from 'viem/accounts'
-import { isAddress } from 'viem'
+import { getAddress, isAddress } from 'viem'
 
 const app = () => document.querySelector<HTMLElement>('#app')
 
@@ -31,6 +48,8 @@ const ICON = {
   refresh:
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 11a8.5 8.5 0 1 0-.9 4.7"/><path d="M20.5 5.5v6h-6"/></svg>',
   clock: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+  check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6.5 9.5 17 4 11.5"/></svg>',
+  lock: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="9.5" rx="2"/><path d="M8 10.5V7.8a4 4 0 0 1 8 0v2.7"/></svg>',
   alert:
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5 2.8 20h18.4L12 4.5Z"/><path d="M12 10.5v3.5"/><path d="M12 17h.01"/></svg>',
 }
@@ -44,7 +63,58 @@ async function boot(): Promise<void> {
 
   const address = await getWalletAddress()
   if (!address) return renderWelcome()
-  renderHome(address as `0x${string}`)
+
+  // Locked on a fresh browser, open for the rest of it — the owner sets which
+  // in Settings.
+  if (await isUnlocked()) return renderHome(address as `0x${string}`)
+  renderLocked(address as `0x${string}`)
+}
+
+/* Lock screen ------------------------------------------------------------ */
+
+function renderLocked(address: `0x${string}`): void {
+  const host = app()
+  if (!host) return
+
+  host.innerHTML = `
+    <header class="bar">
+      <span class="wordmark">tipee</span>
+      <span class="bar-actions">${arcBadge()}</span>
+    </header>
+    <section class="form locked">
+      <div class="state">
+        <span class="state-icon">${ICON.lock}</span>
+        <p class="state-title">Wallet locked</p>
+        <p class="state-detail">Enter your PIN to unlock ${escapeHtml(shorten(address))}.</p>
+      </div>
+      <label for="unlock-pin">PIN</label>
+      <input id="unlock-pin" type="password" inputmode="numeric" maxlength="32" autocomplete="off" autofocus />
+      <p class="error" id="unlock-error"></p>
+      <div class="bracket"><button class="primary" id="unlock" type="button">Unlock</button></div>
+    </section>
+  `
+
+  const submit = (): void => void unlockWalletFromScreen(address)
+  document.querySelector('#unlock')?.addEventListener('click', submit)
+  document.querySelector('#unlock-pin')?.addEventListener('keydown', (event) => {
+    if ((event as KeyboardEvent).key === 'Enter') submit()
+  })
+}
+
+async function unlockWalletFromScreen(address: `0x${string}`): Promise<void> {
+  const pin = document.querySelector<HTMLInputElement>('#unlock-pin')?.value ?? ''
+  const error = document.querySelector<HTMLElement>('#unlock-error')
+  if (pin === '') {
+    if (error) error.textContent = 'Enter your PIN.'
+    return
+  }
+
+  try {
+    await unlock(pin)
+    renderHome(address)
+  } catch (err) {
+    if (error) error.textContent = unlockMessage(err)
+  }
 }
 
 function chrome_(): string {
@@ -226,15 +296,15 @@ function emptyState(icon: string, title: string, detail: string, retry = false):
 }
 
 /**
- * How much history the list actually covers.
+ * How much history the list actually covers, said only when it is not all of it.
  *
- * The explorer returns all of it; the log scan behind it reaches back about a
- * day, less when an RPC cuts it short. Saying which one is on screen is the
- * difference between an old tip that is out of range and an old tip that never
- * happened.
+ * The explorer returns the lot, so a complete list needs no caption — the list
+ * is the answer. The log scan behind it reaches back about a day, less when an
+ * RPC cuts it short, and that does need saying: otherwise an old tip that is
+ * out of range and an old tip that never happened look the same.
  */
 export function coverageNote(report: Pick<ActivityReport, 'source' | 'scannedBlocks' | 'partial'>): string {
-  if (report.source === 'explorer') return 'all time'
+  if (report.source === 'explorer') return ''
   if (report.scannedBlocks === undefined) return ''
 
   const span = duration(Number(report.scannedBlocks) * ARC_BLOCK_SECONDS)
@@ -383,83 +453,385 @@ async function renderQr(frame: HTMLElement, address: string): Promise<void> {
   frame.innerHTML = qrSvg(address, { logo: ARC_LOGO })
 }
 
-/* Withdraw --------------------------------------------------------------- */
+/* Send ------------------------------------------------------------------- */
 
-function renderWithdraw(address: `0x${string}`): void {
+/**
+ * Sending, in the three steps every wallet uses: say where and how much, look
+ * at what it will actually do, then authorise it.
+ *
+ * The middle step is the one this screen used to be missing. A single form that
+ * takes an address, an amount and a PIN together asks somebody to authorise a
+ * transaction whose fee, total and outcome they have not seen — and on Arc the
+ * fee comes out of the same USDC being sent, so "send my balance" is always
+ * short by an amount the sender was never shown.
+ *
+ * A tip does not go through this. It is a fixed, small amount to an escrow the
+ * extension resolved rather than an address somebody typed, and the composer
+ * already shows its fee — a dry run there would buy a second confirmation step
+ * for the flow that most needs to stay quick.
+ */
+interface SendDraft {
+  to: string
+  amount: string
+}
+
+function renderWithdraw(address: `0x${string}`, draft: SendDraft = { to: '', amount: '' }): void {
   const host = app()
   if (!host) return
 
   host.innerHTML = `
-    ${backBar('Withdraw')}
+    ${backBar('Send')}
     <section class="form">
       <label for="to">To address</label>
-      <input id="to" type="text" autocomplete="off" spellcheck="false" placeholder="0x…" />
-      <label for="amount">Amount</label>
-      <input id="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00" />
-      <label for="pin">PIN</label>
-      <input id="pin" type="password" inputmode="numeric" autocomplete="off" />
-      <p class="error" id="withdraw-error"></p>
-      <div class="bracket"><button class="primary" id="send" type="button">Withdraw</button></div>
+      <input id="to" type="text" autocomplete="off" spellcheck="false" placeholder="0x…" value="${escapeHtml(draft.to)}" />
+
+      <div class="field-head">
+        <label for="amount">Amount</label>
+        <span class="field-note" id="available">Available —</span>
+      </div>
+      <div class="field-row">
+        <input id="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${escapeHtml(draft.amount)}" />
+        <button class="ghost" id="max" type="button" disabled><span>Max</span></button>
+      </div>
+
+      <p class="error" id="send-error"></p>
+      <div class="bracket"><button class="primary" id="review" type="button">Review</button></div>
     </section>
   `
 
   document.querySelector('#back')?.addEventListener('click', () => renderHome(address))
-  document.querySelector('#send')?.addEventListener('click', () => void submitWithdraw(address))
+  document.querySelector('#review')?.addEventListener('click', () => {
+    const next: SendDraft = {
+      to: document.querySelector<HTMLInputElement>('#to')?.value.trim() ?? '',
+      amount: document.querySelector<HTMLInputElement>('#amount')?.value.trim() ?? '',
+    }
+    const checked = validateSendDraft(next)
+    if (!checked.ok) {
+      const error = document.querySelector<HTMLElement>('#send-error')
+      if (error) error.textContent = checked.message
+      return
+    }
+    renderSendReview(address, next, checked.to, checked.amount)
+  })
+
+  void loadSendable(address)
 }
 
-async function submitWithdraw(owner: `0x${string}`): Promise<void> {
-  const to = document.querySelector<HTMLInputElement>('#to')?.value.trim() ?? ''
-  const amountText = document.querySelector<HTMLInputElement>('#amount')?.value ?? ''
-  const pin = document.querySelector<HTMLInputElement>('#pin')?.value ?? ''
-  const error = document.querySelector<HTMLElement>('#withdraw-error')
+/**
+ * What can actually leave, which is the balance less the fee — never the
+ * balance. Max fills in that figure rather than making the sender discover it
+ * by having a transaction refused.
+ */
+async function loadSendable(owner: `0x${string}`): Promise<void> {
+  const available = document.querySelector<HTMLElement>('#available')
+  const max = document.querySelector<HTMLButtonElement>('#max')
+
+  try {
+    const client = arcPublicClient()
+    const balance = await usdcBalance(client, owner)
+    if (available) available.textContent = `Available ${formatUsdc(balance)} USDC`
+    if (balance === 0n) return
+
+    // Priced against a real transfer of this wallet's own funds, so the figure
+    // is the fee this send will actually pay.
+    const preview = await previewSend(client, { from: owner, to: owner, amount: 1n })
+    const sendable = maxSendable(balance, preview.gasCost)
+    if (!max || sendable === 0n) return
+
+    max.disabled = false
+    max.addEventListener('click', () => {
+      const amount = document.querySelector<HTMLInputElement>('#amount')
+      if (amount) amount.value = formatUsdc(sendable)
+    })
+  } catch {
+    // Max is a convenience. Losing it must not stop somebody typing a figure.
+    if (available && available.textContent === 'Available —') available.textContent = ''
+  }
+}
+
+/**
+ * Address and amount, checked before anything is asked of the network.
+ *
+ * Addresses arrive in all three forms people are given them in: checksummed,
+ * all lowercase, all uppercase. Only a *mixed*-case address carries a checksum
+ * to verify, so that is the only case where a failed one is rejected — a
+ * lowercase address from an explorer or an exchange is perfectly good, and
+ * refusing it would look like a broken wallet. Anything accepted is normalised
+ * to its checksummed form, which is what the transfer is encoded with.
+ */
+export function validateSendDraft(
+  draft: SendDraft,
+): { ok: true; to: `0x${string}`; amount: bigint } | { ok: false; message: string } {
+  if (draft.to === '') return { ok: false, message: 'Enter the address to send to.' }
+  if (!isAddress(draft.to, { strict: false })) {
+    return { ok: false, message: 'That is not a valid Arc address.' }
+  }
+
+  const singleCase = draft.to === draft.to.toLowerCase() || draft.to === draft.to.toUpperCase()
+  if (!singleCase && !isAddress(draft.to)) {
+    // Mixed case is a checksum, and a checksum that does not match is a typo
+    // in an address that would otherwise look completely normal.
+    return { ok: false, message: 'That address looks mistyped — its checksum does not match.' }
+  }
+
+  const to = getAddress(draft.to.toLowerCase())
+
+  const amount = tryParseUsdc(draft.amount)
+  if (amount === null) return { ok: false, message: 'Enter an amount in USDC, like 5.00.' }
+  if (amount <= 0n) return { ok: false, message: 'Enter an amount to send.' }
+
+  return { ok: true, to, amount }
+}
+
+function renderSendReview(
+  address: `0x${string}`,
+  draft: SendDraft,
+  to: `0x${string}`,
+  amount: bigint,
+): void {
+  const host = app()
+  if (!host) return
+
+  host.innerHTML = `
+    ${backBar('Review')}
+    <section class="review">
+      <div class="review-head">
+        <p class="review-amount">$${escapeHtml(formatUsdc(amount))}</p>
+        <p class="review-sub">to ${escapeHtml(shorten(to))}</p>
+      </div>
+      <div class="summary" id="summary">
+        <div class="movement skeleton" aria-hidden="true"></div>
+        <div class="movement skeleton" aria-hidden="true"></div>
+      </div>
+      <p class="sim" id="sim"><span class="sim-icon">${ICON.clock}</span>Running this transfer against Arc…</p>
+    </section>
+    <div class="bracket"><button class="primary" id="confirm" type="button" disabled>Confirm</button></div>
+  `
+
+  document.querySelector('#back')?.addEventListener('click', () => renderWithdraw(address, draft))
+  void loadPreview(address, draft, to, amount)
+}
+
+async function loadPreview(
+  address: `0x${string}`,
+  draft: SendDraft,
+  to: `0x${string}`,
+  amount: bigint,
+): Promise<void> {
+  const summary = document.querySelector<HTMLElement>('#summary')
+  const sim = document.querySelector<HTMLElement>('#sim')
+  const confirm = document.querySelector<HTMLButtonElement>('#confirm')
+
+  try {
+    const preview = await previewSend(arcPublicClient(), { from: address, to, amount })
+
+    if (summary) summary.innerHTML = summaryRows(preview)
+    if (sim) {
+      sim.classList.add('ok')
+      sim.innerHTML = `<span class="sim-icon">${ICON.check}</span>Checked on Arc against live state — this transfer succeeds. Re-checked when you confirm.`
+    }
+    if (confirm) {
+      confirm.disabled = false
+      confirm.addEventListener('click', () => {
+        if (confirm.disabled) return
+        void confirmSend(address, draft, preview, confirm)
+      })
+    }
+  } catch (error) {
+    // Nothing is signable from here. The way out is back to the form, with the
+    // reason on screen rather than a disabled button and no explanation.
+    if (summary) summary.innerHTML = ''
+    if (sim) {
+      sim.classList.add('bad')
+      sim.innerHTML = `<span class="sim-icon">${ICON.alert}</span>${escapeHtml(sendErrorMessage(error))}`
+    }
+    if (confirm) confirm.textContent = 'Edit'
+    if (confirm) {
+      confirm.disabled = false
+      confirm.addEventListener('click', () => renderWithdraw(address, draft))
+    }
+  }
+}
+
+function summaryRows(preview: SendPreview): string {
+  return `
+    <div class="summary-row"><span>To</span><span class="mono" title="${escapeHtml(preview.to)}">${escapeHtml(
+      shorten(preview.to),
+    )}</span></div>
+    <div class="summary-row"><span>Amount</span><span>${escapeHtml(formatUsdc(preview.amount))} USDC</span></div>
+    <div class="summary-row"><span>Network fee</span><span>${escapeHtml(formatUsdc(preview.gasCost))} USDC</span></div>
+    <div class="summary-row total"><span>Total</span><span>${escapeHtml(formatUsdc(preview.total))} USDC</span></div>
+    <div class="summary-row"><span>Balance after</span><span>${escapeHtml(formatUsdc(preview.balanceAfter))} USDC</span></div>`
+}
+
+/**
+ * Confirm is the signature.
+ *
+ * An open wallet signs here and goes straight to the receipt; one that is
+ * locked — because the browser has just started, the session went idle, or the
+ * owner asked for a PIN on every transaction — steps through the PIN screen
+ * first. Either way the total being authorised is the one already on screen.
+ */
+async function confirmSend(
+  address: `0x${string}`,
+  draft: SendDraft,
+  preview: SendPreview,
+  button: HTMLButtonElement,
+): Promise<void> {
+  const mnemonic = await sessionMnemonic()
+  if (!mnemonic) return renderSendConfirm(address, draft, preview)
+
+  button.disabled = true
+  button.textContent = 'Sending…'
+  await performSend(address, preview, mnemonic, button, 'Confirm')
+}
+
+/**
+ * The PIN screen, for a wallet that is not open.
+ *
+ * It sits after the numbers, never beside them: a PIN typed next to an amount
+ * field is part of filling in a form, and this is the last thing before money
+ * moves.
+ */
+function renderSendConfirm(address: `0x${string}`, draft: SendDraft, preview: SendPreview): void {
+  const host = app()
+  if (!host) return
+
+  host.innerHTML = `
+    ${backBar('Confirm')}
+    <section class="form">
+      <div class="review-head">
+        <p class="review-amount">$${escapeHtml(formatUsdc(preview.amount))}</p>
+        <p class="review-sub">to ${escapeHtml(shorten(preview.to))} · fee ${escapeHtml(
+          formatUsdc(preview.gasCost),
+        )} USDC</p>
+      </div>
+      <label for="pin">PIN</label>
+      <input id="pin" type="password" inputmode="numeric" maxlength="32" autocomplete="off" />
+      <p class="error" id="send-error"></p>
+      <div class="bracket"><button class="primary" id="send" type="button">Send</button></div>
+    </section>
+  `
+
+  document.querySelector('#back')?.addEventListener('click', () => renderSendReview(address, draft, preview.to, preview.amount))
+
+  const button = document.querySelector<HTMLButtonElement>('#send')
+  button?.addEventListener('click', () => {
+    if (button.disabled) return
+    void submitSend(address, draft, preview, button)
+  })
+}
+
+async function submitSend(
+  owner: `0x${string}`,
+  draft: SendDraft,
+  preview: SendPreview,
+  button: HTMLButtonElement,
+): Promise<void> {
+  const error = document.querySelector<HTMLElement>('#send-error')
   const say = (message: string): void => {
     if (error) error.textContent = message
   }
 
-  if (!isAddress(to)) return say('That is not a valid address.')
-  const amount = tryParseUsdc(amountText)
-  if (amount === null || amount <= 0n) return say('Enter an amount to withdraw.')
+  const pin = document.querySelector<HTMLInputElement>('#pin')?.value ?? ''
   if (pin === '') return say('Enter your PIN.')
 
-  say('Sending…')
+  // Held down for the whole send: a second click is a second transaction.
+  button.disabled = true
+  button.textContent = 'Sending…'
+  say('')
 
   let mnemonic: string
   try {
-    mnemonic = await unlockWallet(pin)
+    // Unlocking here also opens the wallet for the rest of the session, unless
+    // the owner asked for a PIN on every transaction.
+    mnemonic = await unlock(pin)
   } catch (err) {
+    button.disabled = false
+    button.textContent = 'Send'
     return say(unlockMessage(err))
   }
 
+  await performSend(owner, preview, mnemonic, button, 'Send')
+}
+
+/**
+ * Signs and broadcasts, whichever screen got here.
+ *
+ * The preview is taken again first. The one on screen was built before the
+ * confirmation — seconds ago, but a balance can move in that time, and this is
+ * the same rule the tip path follows in the service worker.
+ */
+async function performSend(
+  owner: `0x${string}`,
+  preview: SendPreview,
+  mnemonic: string,
+  button: HTMLButtonElement,
+  restoreLabel: string,
+): Promise<void> {
+  const error = document.querySelector<HTMLElement>('#send-error')
+
   try {
     const account = mnemonicToAccount(mnemonic)
-    const call = buildTipCall({ recipient: to as `0x${string}`, amount, memo: '', nonce: crypto.randomUUID() })
     const client = arcPublicClient()
+    const fresh = await previewSend(client, { from: owner, to: preview.to, amount: preview.amount })
 
-    // Same headroom rule as a tip: gas is USDC out of this balance, so a wallet
-    // holding exactly the amount cannot send it (idea.md §3.1.5).
-    const balance = await usdcBalance(client, owner)
-    const gas = await client.estimateGas({ account: account.address, to: call.to, data: call.data })
-    const fees = await client.estimateFeesPerGas()
-    const price = fees.maxFeePerGas ?? (await client.getGasPrice())
-    const check = validateTip({ amount, balance, gasCost: ceilToAccounting(gas * price), minimum: MIN_TIP })
-    if (!check.ok) return say(check.message)
-
-    await arcWalletClient(account).sendTransaction({
+    const txHash = await arcWalletClient(account).sendTransaction({
       account,
       chain: undefined,
-      to: call.to,
-      data: call.data,
+      to: fresh.call.to,
+      data: fresh.call.data,
     })
-    renderHome(owner)
+
+    renderSendResult(owner, fresh, txHash)
   } catch (err) {
-    say(err instanceof Error ? err.message : 'The withdrawal could not be sent.')
+    button.disabled = false
+    button.textContent = restoreLabel
+    const message = sendErrorMessage(err)
+    if (error) error.textContent = message
+    else {
+      // The review screen has no error line; the check line carries it.
+      const sim = document.querySelector<HTMLElement>('#sim')
+      if (sim) {
+        sim.classList.remove('ok')
+        sim.classList.add('bad')
+        sim.innerHTML = `<span class="sim-icon">${ICON.alert}</span>${escapeHtml(message)}`
+      }
+    }
   }
 }
 
-/** Gas is priced in 18 decimals; rounds up, so a fee is never shown short. */
-function ceilToAccounting(wei: bigint): bigint {
-  const scale = 10n ** 12n
-  return (wei + scale - 1n) / scale
+function renderSendResult(address: `0x${string}`, preview: SendPreview, txHash: `0x${string}`): void {
+  const host = app()
+  if (!host) return
+
+  host.innerHTML = `
+    ${backBar('Sent')}
+    <section class="review">
+      <div class="state">
+        <span class="state-icon ok">${ICON.check}</span>
+        <p class="state-title">${escapeHtml(formatUsdc(preview.amount))} USDC sent</p>
+        <p class="state-detail">to ${escapeHtml(shorten(preview.to))}</p>
+        <a class="ghost" id="receipt" target="_blank" rel="noreferrer noopener"><span>View on Arc explorer</span></a>
+      </div>
+    </section>
+    <div class="bracket"><button class="primary" id="done" type="button">Done</button></div>
+  `
+
+  const receipt = document.querySelector<HTMLAnchorElement>('#receipt')
+  if (receipt) receipt.href = `${ARC_EXPLORER}/tx/${encodeURIComponent(txHash)}`
+
+  document.querySelector('#back')?.addEventListener('click', () => renderHome(address))
+  document.querySelector('#done')?.addEventListener('click', () => renderHome(address))
+}
+
+/** Failures, said in terms of what the sender can do about them. */
+export function sendErrorMessage(error: unknown): string {
+  if (error instanceof InsufficientFundsError) {
+    return `${error.message} Short by ${formatUsdc(error.shortBy)} USDC.`
+  }
+  if (error instanceof SendUnavailableError) return error.message
+  return 'The transfer could not be sent.'
 }
 
 /* Settings --------------------------------------------------------------- */
@@ -474,6 +846,10 @@ function renderSettings(address: `0x${string}`): void {
       <p class="section-label">Wallet address</p>
       <p class="address">${escapeHtml(address)}</p>
 
+      <p class="section-label">Ask for the PIN</p>
+      <div class="choices" id="policy"></div>
+      <button class="ghost" id="lock-now" type="button"><span>Lock wallet now</span></button>
+
       <p class="section-label">Recovery phrase</p>
       <p class="muted-line">Twelve words that restore this wallet anywhere. Anyone who reads them can spend your funds.</p>
       <label for="reveal-pin">PIN</label>
@@ -485,6 +861,33 @@ function renderSettings(address: `0x${string}`): void {
 
   document.querySelector('#back')?.addEventListener('click', () => renderHome(address))
   document.querySelector('#reveal')?.addEventListener('click', () => void revealPhrase(address))
+  document.querySelector('#lock-now')?.addEventListener('click', () => void lock().then(() => renderLocked(address)))
+
+  void renderPolicyChoices()
+}
+
+/** The unlock rule, as three plain statements of what the wallet will do. */
+async function renderPolicyChoices(): Promise<void> {
+  const host = document.querySelector<HTMLElement>('#policy')
+  if (!host) return
+
+  const current = await unlockPolicy()
+  host.innerHTML = UNLOCK_POLICIES.map(
+    (option) => `
+      <label class="choice">
+        <input type="radio" name="policy" value="${option.value}"${option.value === current ? ' checked' : ''} />
+        <span class="choice-copy">
+          <span class="choice-label">${escapeHtml(option.label)}</span>
+          <span class="choice-detail">${escapeHtml(option.detail)}</span>
+        </span>
+      </label>`,
+  ).join('')
+
+  host.querySelectorAll<HTMLInputElement>('input[name="policy"]').forEach((input) => {
+    input.addEventListener('change', () => {
+      if (input.checked) void setUnlockPolicy(input.value as UnlockPolicy)
+    })
+  })
 }
 
 async function revealPhrase(address: `0x${string}`): Promise<void> {

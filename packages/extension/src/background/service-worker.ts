@@ -13,7 +13,8 @@ import { arcPublicClient, arcWalletClient, usdcBalance } from '../chain/arc'
 import { EscrowUnavailableError, resolveEscrowAddress } from '../chain/creators'
 import { recordTip } from '../chain/journal'
 import { buildTipCall } from '../chain/tip'
-import { WalletLockedError, WalletWipedError, getWalletAddress, unlockWallet } from '../wallet/keystore'
+import { WalletLockedError, WalletWipedError, getWalletAddress } from '../wallet/keystore'
+import { isUnlocked, sessionMnemonic, unlock } from '../wallet/session'
 
 let composerWindowId: number | undefined
 let pendingCreator: ScrapedCreator | null = null
@@ -90,6 +91,7 @@ async function composerContext(amount: string, memo: string): Promise<ComposerCo
     gasCost: null,
     recipient: null,
     problem: null,
+    needsPin: !(await isUnlocked()),
   }
 
   context.walletAddress = await getWalletAddress()
@@ -168,11 +170,15 @@ async function sendTip(message: Extract<ExtensionMessage, { type: 'SEND_TIP' }>)
     return { ok: false, message: error instanceof EscrowUnavailableError ? error.message : 'Could not find this creator.' }
   }
 
-  let mnemonic: string
-  try {
-    mnemonic = await unlockWallet(message.pin)
-  } catch (error) {
-    return { ok: false, message: unlockMessage(error) }
+  // An open wallet signs without asking again; a locked one — or an owner who
+  // asked for a PIN every time — comes through with one to check.
+  let mnemonic: string | null = message.pin === '' ? await sessionMnemonic() : null
+  if (mnemonic === null) {
+    try {
+      mnemonic = await unlock(message.pin)
+    } catch (error) {
+      return { ok: false, message: unlockMessage(error) }
+    }
   }
 
   try {

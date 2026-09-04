@@ -2,6 +2,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import type { Movement } from '../chain/activity'
+import { InsufficientFundsError, SendUnavailableError } from '../chain/simulate'
 import { WalletLockedError, WalletWipedError } from '../wallet/keystore'
 
 let shorten: (address: string) => string
@@ -10,6 +11,10 @@ let pickCheckIndexes: (total: number, count?: number, random?: () => number) => 
 let coverageNote: (report: { source: 'explorer' | 'chain'; scannedBlocks?: bigint; partial: boolean }) => string
 let ageFromBlocks: (blocks: bigint) => string
 let ageOf: (movement: Movement, head?: bigint, now?: Date) => string
+let validateSendDraft: (draft: { to: string; amount: string }) =>
+  | { ok: true; to: `0x${string}`; amount: bigint }
+  | { ok: false; message: string }
+let sendErrorMessage: (error: unknown) => string
 let movementLabel: (
   movement: Movement,
   tip?: { handle: string; displayName: string },
@@ -34,6 +39,8 @@ beforeAll(async () => {
   ageFromBlocks = popup.ageFromBlocks
   ageOf = popup.ageOf
   movementLabel = popup.movementLabel
+  validateSendDraft = popup.validateSendDraft
+  sendErrorMessage = popup.sendErrorMessage
   seedWordsMatch = popup.seedWordsMatch
 })
 
@@ -132,8 +139,9 @@ describe('backup check answers', () => {
 })
 
 describe('how far back the list looks', () => {
-  it('says so plainly when the explorer answered with everything', () => {
-    expect(coverageNote({ source: 'explorer', partial: false })).toBe('all time')
+  it('says nothing when the explorer answered with everything', () => {
+    // A complete list needs no caption; the list is the answer.
+    expect(coverageNote({ source: 'explorer', partial: false })).toBe('')
   })
 
   // Arc runs at about 0.52s a block, so 150,000 blocks is a bit under a day.
@@ -214,5 +222,67 @@ describe('what a row says it is', () => {
     // from the address alone would put a creator's name on a stranger's tip.
     expect(movementLabel(row(true))).toEqual({ title: 'Sent', sub: '0x1f98…f984' })
     expect(movementLabel(row(false))).toEqual({ title: 'Received', sub: '0x1f98…f984' })
+  })
+})
+
+describe('checking a send before the network is asked', () => {
+  it('accepts an address and an amount', () => {
+    const checked = validateSendDraft({ to: '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984', amount: '2.50' })
+    expect(checked).toMatchObject({ ok: true, amount: 2_500_000n })
+  })
+
+  it('takes a lowercase address, which is how explorers hand them out', () => {
+    // viem's default check is checksum-strict, so this used to read as invalid.
+    const checked = validateSendDraft({ to: '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984', amount: '1' })
+    expect(checked).toMatchObject({ ok: true, to: '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984' })
+  })
+
+  it('rejects a mixed-case address whose checksum does not match', () => {
+    // Mixed case is a checksum; a broken one is a typo in something that
+    // otherwise looks like a perfectly ordinary address.
+    expect(validateSendDraft({ to: '0x1f9840A85d5aF5bf1D1762F925BDADdC4201F984', amount: '1' })).toMatchObject({
+      ok: false,
+      message: 'That address looks mistyped — its checksum does not match.',
+    })
+  })
+
+  it('refuses anything that is not an address, before a fee is estimated for it', () => {
+    expect(validateSendDraft({ to: '', amount: '1' })).toMatchObject({ ok: false })
+    expect(validateSendDraft({ to: 'romeo.eth', amount: '1' })).toMatchObject({
+      ok: false,
+      message: 'That is not a valid Arc address.',
+    })
+  })
+
+  it('refuses an amount that is not one', () => {
+    const to = '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984'
+    expect(validateSendDraft({ to, amount: '' })).toMatchObject({ ok: false })
+    expect(validateSendDraft({ to, amount: 'lots' })).toMatchObject({ ok: false })
+    expect(validateSendDraft({ to, amount: '0' })).toMatchObject({
+      ok: false,
+      message: 'Enter an amount to send.',
+    })
+  })
+})
+
+describe('why a send did not go', () => {
+  it('says how far short the balance was', () => {
+    // On Arc the fee is USDC too, so this is almost always somebody sending
+    // their whole balance and missing by exactly the fee.
+    expect(sendErrorMessage(new InsufficientFundsError(1_950n, 'Not enough USDC.'))).toBe(
+      'Not enough USDC. Short by 0.00195 USDC.',
+    )
+  })
+
+  it('passes through what the chain check found', () => {
+    expect(sendErrorMessage(new SendUnavailableError('Arc rejected this transfer.'))).toBe(
+      'Arc rejected this transfer.',
+    )
+  })
+
+  it('never shows a raw error to somebody moving money', () => {
+    expect(sendErrorMessage(new Error('TransactionExecutionError: 0xdeadbeef'))).toBe(
+      'The transfer could not be sent.',
+    )
   })
 })

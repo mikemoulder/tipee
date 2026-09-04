@@ -135,6 +135,52 @@ main { display: flex; flex-direction: column; gap: 16px; min-height: 540px; padd
 .movement-amount.out { color: var(--muted); }
 .movement-amount.in { color: var(--forest); }
 
+/* Lock and settings choices ---------------------------------------------- */
+
+.locked { flex: 1; }
+.locked .state { border-style: solid; }
+
+.choices { display: flex; flex-direction: column; gap: 6px; }
+.choice { display: flex; align-items: flex-start; gap: 9px; border: 1px solid var(--rule); border-radius: 3px; padding: 10px 11px; cursor: pointer; background: var(--card); letter-spacing: 0; text-transform: none; }
+.choice:has(input:checked) { border-color: var(--forest); }
+.choice input { width: auto; margin-top: 2px; accent-color: var(--forest); }
+.choice-copy { display: flex; flex-direction: column; gap: 2px; }
+.choice-label { color: var(--ink); font-size: 11px; }
+.choice-detail { color: var(--faint); font-size: 10px; line-height: 1.5; }
+
+/* Send ------------------------------------------------------------------- */
+
+.field-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.field-note { color: var(--faint); font-size: 9.5px; letter-spacing: 0.06em; }
+.field-row { display: flex; align-items: center; gap: 8px; }
+.field-row input { flex: 1; }
+.field-row .ghost { flex: none; }
+.ghost:disabled { cursor: not-allowed; opacity: 0.45; }
+
+.review { display: flex; flex: 1; flex-direction: column; gap: 14px; }
+.review-head { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 4px 0 2px; text-align: center; }
+.review-amount { margin: 0; font-family: var(--display); font-size: 32px; font-weight: 600; letter-spacing: -0.03em; }
+.review-sub { margin: 0; color: var(--faint); font-size: 10.5px; }
+
+.summary { display: flex; flex-direction: column; gap: 0; border: 1px solid var(--rule); border-radius: 3px; background: var(--card); }
+.summary-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 13px; font-size: 11px; }
+.summary-row + .summary-row { border-top: 1px solid var(--rule); }
+.summary-row > span:first-child { color: var(--faint); }
+.summary-row > span:last-child { font-variant-numeric: tabular-nums; }
+.summary-row.total > span:last-child { font-weight: 600; }
+.summary .movement.skeleton { height: 42px; border: 0; border-radius: 0; }
+.summary .movement.skeleton + .movement.skeleton { border-top: 1px solid var(--rule); }
+
+/* What the chain said when the real transfer was run against it. */
+.sim { display: flex; align-items: flex-start; gap: 7px; margin: 0; color: var(--faint); font-size: 10px; line-height: 1.6; }
+.sim.ok { color: var(--muted); }
+.sim.bad { color: var(--danger); }
+.sim-icon { display: grid; place-items: center; flex: none; width: 15px; height: 15px; margin-top: 1px; }
+.sim-icon svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; }
+
+.state-icon.ok { color: var(--forest); background: var(--mint); }
+a.ghost { text-decoration: none; }
+
 /* States ---------------------------------------------------------------- */
 
 .movement.skeleton {
