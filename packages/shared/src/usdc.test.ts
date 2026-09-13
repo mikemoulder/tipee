@@ -8,7 +8,7 @@ import {
   parseUsdc,
   scaleUnits,
   tryParseUsdc,
-} from './usdc'
+} from './usdc.ts'
 
 describe('parseUsdc', () => {
   it('parses ordinary amounts', () => {

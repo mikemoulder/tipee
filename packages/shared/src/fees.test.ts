@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { BPS_DENOMINATOR, PLATFORM_FEE_BPS, formatWithdrawalSplit, splitWithdrawal } from './fees'
-import { ONE_USDC, formatUsdc, parseUsdc } from './usdc'
+import { BPS_DENOMINATOR, PLATFORM_FEE_BPS, formatWithdrawalSplit, splitWithdrawal } from './fees.ts'
+import { ONE_USDC, formatUsdc, parseUsdc } from './usdc.ts'
 
 describe('splitWithdrawal', () => {
   it('takes 4%', () => {

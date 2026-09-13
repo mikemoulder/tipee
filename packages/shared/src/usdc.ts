@@ -29,12 +29,15 @@ export const ONE_USDC = 1_000_000n
 const DECIMAL_RE = /^(\d*)(?:\.(\d*))?$/
 
 export class UsdcParseError extends Error {
-  constructor(
-    public readonly input: string,
-    message: string,
-  ) {
+  // A plain field rather than a parameter property: this package is imported as
+  // source by the API, which Node runs with type stripping, and stripping
+  // cannot express a parameter property's assignment.
+  readonly input: string
+
+  constructor(input: string, message: string) {
     super(message)
     this.name = 'UsdcParseError'
+    this.input = input
   }
 }
 

@@ -9,8 +9,8 @@ import {
   memoByteLength,
   minTipInUnits,
   validateTip,
-} from './limits'
-import { ONE_USDC } from './usdc'
+} from './limits.ts'
+import { ONE_USDC } from './usdc.ts'
 
 /** Standard 6-decimal case: minimum is 0.50 USDC. */
 const min = MIN_TIP

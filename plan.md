@@ -11,7 +11,7 @@ Build a Manifest V3 browser extension that lets viewers tip YouTube creators in 
 - [x] Add MV3 and Vite build configuration.
 - [x] Add automated test, typecheck, and build checks.
 - [x] Settle Arc configuration: chain via viem's `arcTestnet`, USDC ERC-20 at `0x3600…0000`, memo contract at `0x5294…de505`. **No longer blocked** — see *Decisions*.
-- [ ] Document deployment configuration (`.env` for the backend, `tipee.apiBase.v1` for the extension).
+- [x] Document deployment configuration — `packages/api/README.md`, plus `.env.example`.
 
 ### 2. Extension Shell
 - [x] Add manifest, service worker, content script, and extension popup entrypoints.
@@ -27,6 +27,7 @@ Build a Manifest V3 browser extension that lets viewers tip YouTube creators in 
 - [x] Show the 12-word seed phrase and confirm three words by position before use.
 - [x] Settings: reveal seed.
 - [ ] Settings: change PIN.
+- [x] Session unlock with a policy: until browser closes, 15 minutes idle, or every transaction.
 - [x] ~~Session expiry~~ — **dropped by decision**, see *Decisions* below.
 
 ### 4. YouTube Tip Experience
@@ -38,14 +39,17 @@ Build a Manifest V3 browser extension that lets viewers tip YouTube creators in 
 - [x] Wallet popup: balance, recent activity, deposit with QR, withdraw.
 - [x] Home screen states: skeletons, copyable address, full-height empty and error states, refresh, coverage disclosure.
 - [x] Full history from the Arc explorer, with the log scan as fallback.
+- [x] Send flow: enter, review with an on-chain dry run and fee, confirm.
 - [x] Name tipped creators in activity from a local tip journal.
 - [ ] Capture real YouTube watch-page HTML fixtures. **Deferred** — the injection and scrape path is behaving on real pages; hand-built DOM tests hold until a layout change proves otherwise.
 
-### 5. Backend MVP — **the blocker**
-- [ ] Add API service and PostgreSQL migrations.
-- [ ] `GET /api/creators/resolve?handle=` returning `wallet_address`, with the channel ID established server-side.
-- [ ] Provision Circle escrow wallets when needed.
-- [ ] Record and validate tips with idempotency protection.
+### 5. Backend MVP
+- [x] Add API service and PostgreSQL migrations.
+- [x] `GET /api/creators/resolve?handle=` returning `wallet_address`, with the channel ID established server-side.
+- [x] Provision Circle escrow wallets when needed. **Written, never called** — no credentials here.
+- [x] Record and validate tips with idempotency protection.
+- [x] Report a sent tip from the extension, best-effort.
+- [ ] Run the migrations and `store.pg.ts` against a real Postgres. **Never executed** — none available on this machine.
 
 ### 6. Creator Dashboard
 - [ ] Add `/claim` channel lookup and balance view.
@@ -55,14 +59,16 @@ Build a Manifest V3 browser extension that lets viewers tip YouTube creators in 
 
 ### 7. Security, Testing, and Release
 - [ ] Verify that PINs, seeds, and private keys never leave extension contexts.
-- [x] Wallet crypto, keystore, backoff, seed-backup check, YouTube parsing, chain, explorer, journal, composer, and popup tests (282).
+- [x] Wallet crypto, keystore, backoff, seed-backup check, YouTube parsing, chain, explorer, journal, simulation, session, composer, popup, and API tests (348).
 - [ ] API, verification, and withdrawal tests.
 - [ ] Run an end-to-end testnet demo.
 - [ ] Package and document the Chrome Web Store release.
 
 ## Decisions
 
-**No session key cache.** idea.md §3.1.1 originally specified caching the derived AES key in `chrome.storage.session` behind an expiry. That cannot coexist with "PIN required to sign every tip" (same section): if the key is cached the PIN is not needed, and if the PIN is needed the cache saves nothing. PIN-per-tip is the specified product behaviour, so the cache is dropped. Derive, decrypt, sign, discard — all inside one message handler, which comfortably outruns the ~30s MV3 idle termination the cache was meant to survive.
+**The wallet stays unlocked for the browsing session.** This reverses the earlier "no session cache, PIN per tip" rule, by decision. idea.md §3.1.1 specified a PIN for every signature; in use that means typing it to send a $2 tip on every video, which is not how the wallets people already have behave. The seed now sits in `chrome.storage.session` — memory-backed, never on disk, unreachable from a content script, and dropped when the browser closes, which is what makes "locked on browser open" true without a timer of our own.
+
+The cost is real: while unlocked, anything that can reach an extension page can sign without the PIN. So the rule is the owner's to set — until the browser closes (default), after 15 minutes idle, or every transaction — and tightening it locks immediately. `ComposerContext.needsPin` carries the answer to the composer so a PIN box appears only when something will check it.
 
 **Content script reads the DOM, backend resolves the channel ID.** MV3 content scripts run in an isolated world and cannot see `window.ytInitialData`. The DOM is the only source that stays correct across SPA navigation, so it is authoritative here; `channelId` resolution moves server-side where it can be hotfixed without an extension update and cannot be spoofed by a client.
 
@@ -74,6 +80,12 @@ Build a Manifest V3 browser extension that lets viewers tip YouTube creators in 
 
 **Tip labels are local, and only labels.** An escrow address is anonymous on-chain and its creator mapping lives in the backend, so "Tipped @creator" can only come from a note this wallet writes when it sends one. That note never decides whether a tip happened or what it was worth — the chain does — and a movement with no note stays an honest unnamed row rather than being attributed by guesswork.
 
+**A send is previewed against the chain; a tip is not.** Before an in-wallet send is confirmed, the actual `transfer` is run as an `eth_call` against live state, gas is estimated on that same call, and the panel shows fee, total and resulting balance — because on Arc the fee is USDC out of the balance being sent, so the whole balance can never leave and the shortfall is otherwise invisible until a transaction is refused. Arc exposes no `eth_simulateV1` or `debug_traceCall`, so there is no asset-diff trace; this is the same fallback MetaMask uses without its simulation service. The preview is re-run immediately before signing. Tips skip it: fixed small amounts to an escrow the extension resolved, with the fee already on screen, do not need a second confirmation step.
+
+**Single-case addresses are accepted, mixed-case ones are verified.** Only a mixed-case address carries a checksum. Rejecting a lowercase one — the form explorers and exchanges hand out — looks like a broken wallet; accepting a mixed-case one whose checksum fails would swallow a typo.
+
+**The backend is the only side trusted with identity or amounts.** A handle resolves to a channel ID server-side, from YouTube, because handles are re-assignable and a client could otherwise name any channel it liked. A reported tip is re-read from Arc, because the request body is a claim and a creator's balance would otherwise be whatever a stranger typed. `tx_hash` is unique in the schema, so idempotency is decided by the database rather than by whichever request checked first — and the same holds for a creator row, so two viewers racing on an unseen channel cannot produce two escrows.
+
 **Escrow resolution fails closed.** With no backend configured, or an unreachable one, or a reply that is not an address, the tip stops. There is no bundled fallback recipient and no reuse of a previously seen address. A tip that does not send is recoverable; a tip that sends to the wrong place is not, and both look the same to the gifter until the money is gone.
 
 **Three words, not a checkbox.** A checkbox at the seed reveal records intent, not a backup. The positions asked are redrawn each attempt so a failed check cannot be passed by copying the same trio off the previous screen.
@@ -81,9 +93,9 @@ Build a Manifest V3 browser extension that lets viewers tip YouTube creators in 
 **PBKDF2 is an interim KDF.** It is GPU-friendly, so a 6-digit PIN is roughly minutes of offline compute for anyone who obtains the ciphertext. The defence that carries weight is that the ciphertext never leaves the device, backed by online backoff. Before mainnet this should become scrypt or Argon2id; `v` and `kdf` are stored in each record so migration is decrypt-and-re-encrypt.
 
 ## Blocked On
-Nothing on the chain side. The remaining blocker is that no backend exists, so `resolveEscrowAddress` throws on every tip and the client's finished path cannot be exercised. `.env.example` lists what the service needs: Circle sandbox API key, entity secret and wallet set, `DATABASE_URL`, `API_ORIGIN`, `TREASURY_ADDRESS`.
+Credentials, not code. The API needs a `DATABASE_URL` pointing at a real Postgres — none is installed on this machine, so the migrations and `store.pg.ts` have never run — and Circle sandbox keys, without which escrow provisioning answers 503 by design.
 
 `scripts/verify-chain.mjs` still exists and still wants `.env`, but the two facts it was written to settle — decimals and transfer shape — are settled. It is now a live-network sanity check, not a prerequisite.
 
 ## Current MVP Milestone
-The client-side vertical slice is complete: scrape → gift button → composer → PIN → signed Arc transfer, plus a wallet popup with balance, activity, deposit and withdraw. The next slice is the backend MVP, after which one real testnet tip can be walked end to end.
+Every piece of the tip path now exists: scrape → gift button → composer → signed Arc transfer → escrow resolved and the tip recorded by the API. What has not happened is one run of it end to end, which needs a Postgres and Circle sandbox keys. That is the next slice, followed by §6.
