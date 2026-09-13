@@ -108,7 +108,7 @@ function injectTipButton(): void {
       screenX: window.screenX + window.innerWidth - 400,
       screenY: window.screenY + 80,
     }
-    void chrome.runtime.sendMessage(message)
+    void requestComposer(message, button)
   })
 
   actionBar.prepend(button)
@@ -117,6 +117,39 @@ function injectTipButton(): void {
   applyTheme(button)
   injectedVideoId = videoId
   startCueLoop(button)
+}
+
+/**
+ * Hands the tip off to the service worker, and says so when it cannot.
+ *
+ * Both ways this fails leave the gifter in the same place — a click that does
+ * nothing at all — and `void` hid each of them differently:
+ *
+ * - After the extension is reloaded or updated, every content script already
+ *   running in an open tab is talking to a runtime that no longer exists.
+ *   `sendMessage` then throws *synchronously* with "Extension context
+ *   invalidated", which `void` does not catch at all; it surfaced as an
+ *   uncaught error in the click handler. Only a page reload fixes it, so the
+ *   one thing worth doing is asking for one.
+ * - Otherwise the call returns a promise, and that promise rejects when the
+ *   worker cannot be reached. `void` turned that into an unhandled rejection
+ *   in a console the gifter is never going to open.
+ *
+ * Catching the throw and the rejection together puts the failure on screen
+ * beside the button that looked like it ignored the click.
+ */
+async function requestComposer(message: ExtensionMessage, button: HTMLButtonElement): Promise<void> {
+  try {
+    await chrome.runtime.sendMessage(message)
+  } catch (error) {
+    const stale = String(error).includes('context invalidated')
+    showMessage(
+      stale
+        ? 'Tipee was updated. Reload this page to tip.'
+        : 'Could not open the tip window. Try again.',
+    )
+    button.title = stale ? 'Reload this page to tip' : 'Tip this creator'
+  }
 }
 
 function startCueLoop(button: HTMLButtonElement): void {
@@ -195,14 +228,30 @@ function isTransparent(color: string): boolean {
   return compact === '' || compact === 'transparent' || compact.endsWith(',0)')
 }
 
+/** The idle nudge. Suppressed once a tip has gone out, and never over a live panel. */
 function showTooltip(): void {
   if (document.getElementById(TOOLTIP_ID) || localStorage.getItem('tipee-tip-sent') === '1') return
+  showMessage('Enjoying the video? Tip the creator — it goes straight to them.')
+}
+
+/**
+ * The small panel beside the button, used for the nudge and for failures.
+ *
+ * A failure replaces whatever is on screen rather than deferring to it: the
+ * nudge is scheduled on a timer and the error answers a click the gifter just
+ * made, so letting the older one win would drop the only message they are
+ * actually waiting on. `role="status"` because for a failure this text is the
+ * entire response to the click, and a screen reader otherwise gets silence.
+ */
+function showMessage(text: string): void {
+  document.getElementById(TOOLTIP_ID)?.remove()
   const tooltip = document.createElement('div')
   tooltip.id = TOOLTIP_ID
+  tooltip.setAttribute('role', 'status')
   const button = document.getElementById(BUTTON_ID)
   if (button instanceof HTMLButtonElement) applyTheme(button)
   tooltip.className = button?.classList.contains('tipee-light') ? 'tipee-light' : 'tipee-dark'
-  tooltip.textContent = 'Enjoying the video? Tip the creator — it goes straight to them.'
+  tooltip.textContent = text
   const dismiss = document.createElement('button')
   dismiss.type = 'button'
   dismiss.setAttribute('aria-label', 'Dismiss')
@@ -210,7 +259,7 @@ function showTooltip(): void {
   dismiss.addEventListener('click', () => tooltip.remove())
   tooltip.prepend(dismiss)
   document.body.append(tooltip)
-  window.setTimeout(() => tooltip.remove(), 4_000)
+  window.setTimeout(() => tooltip.remove(), 6_000)
 }
 
 const observer = new MutationObserver(injectTipButton)
