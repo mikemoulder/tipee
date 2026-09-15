@@ -93,7 +93,11 @@ The cost is real: while unlocked, anything that can reach an extension page can 
 **PBKDF2 is an interim KDF.** It is GPU-friendly, so a 6-digit PIN is roughly minutes of offline compute for anyone who obtains the ciphertext. The defence that carries weight is that the ciphertext never leaves the device, backed by online backoff. Before mainnet this should become scrypt or Argon2id; `v` and `kdf` are stored in each record so migration is decrypt-and-re-encrypt.
 
 ## Blocked On
-Credentials, not code. The API needs a `DATABASE_URL` pointing at a real Postgres — none is installed on this machine, so the migrations and `store.pg.ts` have never run — and Circle sandbox keys, without which escrow provisioning answers 503 by design.
+A Postgres, and nothing else. `DATABASE_URL` is set but points at `localhost:5432` with nothing listening, and this machine has neither `docker` nor `psql`, so the migrations and `store.pg.ts` have still never run.
+
+Circle is **no longer blocked** (corrected 2026-09-14). The keys were in `.env` all along and a wallet set already exists; `scripts/create-wallet-set.ts` would mint a second one rather than being a prerequisite. A duplicated key block at the end of `.env` had been blanking `CIRCLE_API_KEY` under last-wins parsing, which made `loadConfig` throw at boot and read from the outside exactly like absent credentials. Deduplicated; the API boots with `circle=configured`.
+
+This blocks §5 only. §6 is not waiting on any of it — the API is built against a `Store` interface with `memoryStore()` and an `EscrowProvider` with `fakeEscrow()`, which is how all 31 existing API tests run.
 
 `scripts/verify-chain.mjs` still exists and still wants `.env`, but the two facts it was written to settle — decimals and transfer shape — are settled. It is now a live-network sanity check, not a prerequisite.
 

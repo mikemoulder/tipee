@@ -1,8 +1,8 @@
 # Tipee Handoff
 
 ## Status
-- Date: 2026-09-14
-- Current milestone: The content script now actually loads in Chrome; the tip path is complete once a Postgres and Circle are supplied
+- Date: 2026-09-15
+- Current milestone: The website was rebuilt in a warmer expression with three self-playing product demos. Both marketing spines, `/install` and a themed 404 render and build. `/claim` is next and needs §6’s API routes.
 - Overall status: In progress
 
 ## Product Context
@@ -16,13 +16,18 @@ Tipee is a Manifest V3 browser extension for tipping YouTube creators in Arc tes
 - Source that Node runs directly spells out `.ts` in relative imports and avoids TypeScript parameter properties: Node's type stripping resolves by filename and cannot express either. TypeScript rewrites the extension on emit.
 - Root typecheck covers `shared` and `extension` project references.
 - The extension builds in **three** Vite passes, and the split is load-bearing, not tidiness: `vite.config.ts` (popup and composer HTML), `vite.config.content.ts` (content script, `iife`, one file), `vite.config.sw.ts` (service worker, `es`). Never put the content script in a pass with anything else — a shared module gets hoisted into a chunk, and the `import` left behind stops Chrome loading the script at all.
+- `website-plan.md` holds the plan for `tipee.xyz`. `plan.md` covers the extension and API; `idea.md` is the original product spec; this file is the running state.
+- `@tipee/web`: the Next.js site. Builds through `npm run build` at the root along with everything else, but is not part of the root `tsc --build` graph — see the website slice below for why.
 - This workspace **is** a git repository, on `main`.
 
 ## Latest Validation
-Run 2026-09-14, all from the repo root:
+Run 2026-09-15, all from the repo root — `npx tsc --build` exits 0, `npm test`
+passes 359 in 21 files, and `npm run build` compiles all four workspaces
+including the rebuilt site (4 static routes):
 - `npm test` — **359 passed**, 21 files.
 - `npx tsc --build` — clean.
 - `npm run build` — extension output written to `packages/extension/dist/`; `dist/content.js` verified as a single file with no module syntax.
+- `npm run build` also builds `@tipee/web` now. Four routes prerender static: `/`, `/viewers`, `/install`, `/_not-found`. Served locally and checked — every route 200s, every internal link resolves, and the Talise tokens reach the emitted CSS (`#2f6a1f`, `#ecefe8`, `.bracket`, and the generated `bg-forest` / `text-muted` / `text-hero` utilities).
 - `npm run verify-chain` — never executed, and no longer on the critical path (see *Chain Facts*).
 - Live check against Arc testnet: explorer history for a real wallet returned 20 movements with timestamps in ~1.6s; the RPC fallback returned 20 from one window in ~3s.
 - Live send preview against Arc testnet: a funded wallet previewed balance 4.001862, fee 0.00217, balance after 3.998692 USDC; an empty wallet's dry run reverted on-chain and surfaced "That is more USDC than this wallet holds."
@@ -39,6 +44,208 @@ The chain probe that earlier drafts of this document listed as a blocker has bee
 2. Composer popup: creator context, amount presets, minimum and balance-plus-gas validation, memo with a byte budget, PIN entry, confirm step, signing, broadcast, result states.
 3. Service worker: resolves escrow, unlocks the wallet, rebuilds the call, **re-checks balance and gas after the PIN is typed** (the composer's estimate predates it), signs, sends.
 4. Popup: onboarding (welcome, PIN, seed reveal, backup check), home balance, recent activity, deposit with QR, withdraw, settings with seed reveal.
+
+## Built This Slice: the website, rebuilt warm (2026-09-15)
+
+The owner rejected the first pass as "not good enough", re-pointed at
+buymeacoffee.com, and asked for the videos that had been requested verbally in
+an earlier session and never written down. **That request was not in this file,
+`website-plan.md`, or git** - it existed only in a conversation nobody recorded.
+Write requests down here when they are made.
+
+Three answers were chosen by the owner before any code was written:
+
+1. **The "videos" are self-playing demos built as markup, not recordings.**
+2. **The visual direction is warmer and closer to BMC** - explicitly accepting
+   that the site stops matching the extension's sage/monospace look.
+3. **The lookup hero stays.** It is the one thing no competitor can say.
+
+### The demos - `components/demo/`
+
+Three looping sequences replace what would otherwise be screen recordings:
+`TipDemo` (watch page -> composer -> PIN -> sent), `VerifyDemo` (About-page
+token -> check -> verified -> withdrawable) and `WalletDemo` (balance, activity,
+deposit).
+
+They are markup rather than video on purpose. A recording would be megabytes,
+soft on a retina display, stale the moment a button changed, and impossible to
+produce at all until somebody sat down and recorded one - which had already
+blocked this once. Markup costs nothing to ship, stays sharp, and is authored
+from the same tokens as the product.
+
+What a recording still buys is *proof that this runs*. That is what the slots in
+`components/media.tsx` are for, and why the demos sit behind a component
+boundary a real clip can replace without a layout change. `ASSETS.md` is the
+manifest.
+
+`use-demo-timeline.ts` enforces three rules: nothing animates off-screen
+(`IntersectionObserver`), nothing animates in a background tab
+(`visibilitychange`), and nothing animates under `prefers-reduced-motion` -
+which pins each demo to its most informative frame instead of its opening one.
+
+### Design system - what changed and why
+
+The palette moved from sage/white to **cream `#fffbf4` with warm-tinted shadows
+and rounded corners**. Body type moved from JetBrains Mono to **Plus Jakarta
+Sans**; mono is kept for amounts, addresses, handles and code, where tabular
+figures earn it. Monospace at paragraph length reads as a terminal, which is
+right for a tool and wrong for a page someone has to warm to.
+
+Two things carry over unchanged so the site and the extension still read as one
+product: **the forest green** and **the corner-tick motif**. The extension was
+not touched.
+
+`GiftMark` in `ui.tsx` draws a parcel with a butter ribbon - the wordmark had no
+mark at all before, which read as unfinished at page scale. It is deliberately
+plain so a real logo replaces it without anything moving.
+
+### Bugs found by rendering the page rather than trusting the code
+
+Screenshots were taken with the installed Chrome in headless mode. Four real
+faults surfaced that reading the source did not:
+
+- **`.aurora` used `z-index: -1`** and was therefore invisible. A negative-z
+  child of a section that creates no stacking context paints behind the *root*
+  background, not behind its own parent's content. It is `z-index: 0` now, with
+  hero content on `relative z-10`.
+- **The nav's "Add to Chrome" showed on phones** despite `hidden sm:inline-flex`.
+  `ButtonLink`'s base classes already set `inline-flex`, and Tailwind settles a
+  display conflict by **stylesheet order, not class order** - so `hidden` lost.
+  The responsive display now lives on a wrapper. Worth remembering: never pass a
+  `display` utility into a component whose base string already sets one.
+- **Scroll-reveal shipped `opacity: 0` in the HTML itself.** Any reader whose
+  JavaScript did not run got the hero followed by an entire invisible page. The
+  hidden state is now gated behind a `.js` class set by an inline script in the
+  head, so the no-JavaScript rendering is the finished page without animation.
+- **The 404 was Next's default black-on-white**, which on a cream site reads as
+  a crash. `app/not-found.tsx` now exists.
+
+### A correctness fix worth calling out
+
+`channel-lookup.tsx` keyed its sample balances to **`@fireship` and
+`@veritasium` - real channels**. Typing a real handle returned "$127.00
+waiting", a false statement about a stranger's money made by a site whose whole
+pitch is that it can be trusted with money. Samples are now fictional
+(`@pixelforge`, `@northbound`), are labelled "Sample channel" in the result, and
+every real handle falls through to the zero state, which is simply true.
+
+### Verifying visual work in this repo
+
+There is no Playwright or Puppeteer, but Chrome is installed and headless
+screenshots work:
+
+```text
+"/c/Program Files/Google/Chrome/Application/chrome.exe" --headless=new \
+  --disable-gpu --hide-scrollbars --virtual-time-budget=7000 \
+  --window-size=1440,2400 --screenshot=out.png http://localhost:3000/
+```
+
+Three things to know before trusting what comes back:
+
+- **`--window-size` below ~640px does not produce a narrow layout viewport** on
+  Windows; Chrome enforces a minimum. To check phone width, point the screenshot
+  at a local HTML file holding a 390px-wide `<iframe>` of the page.
+- **Anchor scrolling (`/#verify`) does not work** under `--virtual-time-budget`.
+  To see a section further down, offset an iframe with a negative `top`, or
+  render the component alone on a scratch route.
+- **CSS transitions often photograph mid-flight**, so a screenshot can show a
+  stale frame while the markup is already correct. Confirm with `--dump-dom`
+  before "fixing" a transition that is not broken.
+
+### What renders
+- **`/`** - creator spine: lookup hero, full-width tip demo, proof strip, three
+  steps, the verification demo, 96/4 split, built-on, custody, FAQ, closing
+  lookup.
+- **`/viewers`** - viewer spine: split hero with the tip demo, three steps, the
+  wallet demo, what a tip costs.
+- **`/install`** - honest that there is no Web Store listing; real unpacked
+  steps.
+- **`/404`** - themed.
+
+### Decisions worth not re-litigating
+- **The toggle is two real routes**, not two client states behind one URL.
+  `SiteNav` marks the active one from `usePathname` and swaps with `Link`, so it
+  feels instant while both halves stay linkable and indexable. Nav and footer
+  live in the layout and never unmount.
+- **The lookup uses `@tipee/shared`’s `parseChannelRef`**, the same function the
+  extension and API use, so what the site accepts cannot drift from what the
+  backend accepts. Only the balance is mocked; when `POST /api/creators/claim`
+  lands, one function in `channel-lookup.tsx` changes and the three result
+  states stay as they are.
+- **The split section and both demos compute their numbers with
+  `splitWithdrawal` and `formatUsdc`**, not hard-coded copy - a fee quoted on the
+  landing page and a fee taken at withdrawal drifting apart is exactly what
+  nobody notices until a creator does.
+- **The demos abstract YouTube rather than reproducing it.** A stylised player, a
+  generic action bar, a fictional channel. Reproducing YouTube's marks would be
+  both a trademark problem and a claim about what is running; what is true is the
+  *position* of the button, and that is what is drawn. Each demo is captioned "a
+  live re-creation of the extension - not a recording".
+- **Fonts are self-hosted via `next/font`**, unlike the extension which imports
+  them from Google at runtime.
+- **`transpilePackages: ['@tipee/shared']`** is required - that package’s
+  `exports` point straight at `./src/index.ts` with no build step.
+- **`packages/web` is deliberately NOT in the root `tsconfig.json` references.**
+  Next needs `jsx: preserve` and bundler resolution, which fight the
+  project-reference build. It typechecks through `next build` instead.
+
+### A trap for whoever builds next
+On Windows, `next build` can fail with
+`Cannot find module '../lightningcss.win32-x64-msvc.node'`. That is npm failing
+to install an optional platform binary that Tailwind v4 needs, not a code fault.
+Fix:
+
+```text
+npm install lightningcss-win32-x64-msvc --no-save
+```
+
+It is intentionally not in `package.json` - pinning a win32 binary there would
+break every other platform.
+
+### Known gaps in what was built
+- **No real screenshots or footage.** The demos carry every claim; `ASSETS.md`
+  lists exactly what to send and where it plugs in, in priority order. Nothing
+  there blocks a deploy.
+- **No logo.** `GiftMark` is a drawn stand-in.
+- **No terms or privacy pages**, and the footer’s Legal column is still absent
+  rather than pointing at 404s. Restore the column with the pages.
+- **`/claim`, `/v/[token]` and `/c/[handle]` do not exist.** They need §6’s API
+  routes.
+- **Dark mode is not implemented.** The palette is a warm, specific thing and a
+  rushed inversion would look worse than its absence.
+- **`website-plan.md` §5 is now out of date** - it specifies the sage/monospace
+  expression, which the owner replaced on 2026-09-15. The rest of that plan
+  still holds.
+
+## The Website Plan (written 2026-09-14)
+
+Direction set by the owner: build `tipee.xyz` before finishing §6's creator dashboard. Two audiences behind a toggle, creators default. References given: buymeacoffee.com for structure, talise.io for the visual language — the same one the extension already speaks.
+
+Full plan in **`website-plan.md`**, with a visual version published as an artifact (link in that file’s header comment is not stored; ask the owner or re-publish). Read the plan before writing any website code — it settles several things that are easy to get wrong:
+
+- **The hero is a lookup, not a signup.** Tipee’s escrow is provisioned by the *gifter*, so a creator arrives to money that already exists. The landing page therefore opens with "You might already have money waiting" and a channel-URL field that is literally step one of `/claim`. Every competitor opens with "start your page"; we cannot, and should not.
+- **The toggle swaps the spine, not the site.** Creator at `/`, viewers at `/viewers` — both real routes, so both are linkable and indexable. Nav, footer, security, built-on and FAQ are written once and never move. Two thin landing pages sharing one URL is the failure mode being avoided.
+- **Stack: Next.js App Router + Tailwind v4 in `packages/web`**, tokens mapped through `@theme`. No shadcn/ui — its defaults fight the established design language. The site talks to the existing Fastify API, not to Next API routes.
+- **`/v/[token]` must be server-rendered and crawlable.** YouTube fetches and displays About-page links, and the whole verification method depends on that URL resolving properly. This is the reason a framework is justified here when the extension deliberately avoids one.
+
+### The dependency worth knowing
+The marketing spines (phases 0–4 in the plan) are unblocked and need no API work. Only `/claim` and `/v/[token]` need §6’s four endpoints, which still do not exist. So the website can start immediately and §6 can land underneath it.
+
+### Waiting on the owner — none of it blocking
+Superseded by `packages/web/ASSETS.md`, which lists filenames, dimensions and
+the slot each one plugs into. Nothing there stops a deploy: the demos carry
+every claim the site makes, and each asset is a straight upgrade when it lands.
+
+The two items that are genuinely gaps rather than polish:
+
+1. **There is no Tipee logo anywhere in the repo** — only `arc_logo.png`.
+   `GiftMark` is a drawn stand-in. Need an SVG wordmark and a square mark.
+2. **`manifest.json` declares no `icons` field**, so Chrome shows the default
+   puzzle piece — in the toolbar, on the extensions page, and in any install
+   screenshot anyone takes. Need 16/32/48/128px PNGs. This is a real gap
+   independent of the website, and it degrades asset 1 in `ASSETS.md`.
+
+Six open decisions are listed at the end of `website-plan.md` and should be answered before phase 2.
 
 ## Fixed This Slice: the gift button never loaded
 
@@ -136,11 +343,13 @@ Corrected 2026-09-14. Two of the three items here were already satisfied and the
 3. Then: set the service URL in the extension’s settings and walk one tip end to end on testnet.
 
 ## Next Actions
-1. Load unpacked in Chrome and confirm the gift button appears on a watch page and opens the composer. This was blocked by the bundle bug and is not any more.
-2. Install a Postgres and point `DATABASE_URL` at it — Docker Desktop, a native Windows install, or a hosted one. The last would change the URL away from `localhost`. Then run the first migration and fix what it finds.
-3. Provision one escrow through Circle and check the address it returns. The credentials and the wallet set are ready; this is the first call that has never been made.
-4. Creator dashboard: `/claim` lookup, About-page verification token, authenticated withdrawal with the 96/4 split. Their tables already exist in migration 001.
-5. Walk a real watch page end to end, through a tip that lands on testnet.
+1. Load unpacked in Chrome and confirm the gift button appears on a watch page and opens the composer. This was blocked by the bundle bug and is not any more. It no longer blocks the website — the demos stand on their own — but it is what makes the real screenshots in `packages/web/ASSETS.md` capturable.
+2. Deploy `packages/web` to Vercel. It builds clean and has nothing left blocking it.
+3. Build §6’s four API routes, then wire `/claim` to them. `memoryStore()` and `fakeEscrow()` cover development, so this needs no Postgres and no Circle call.
+4. Install a Postgres and point `DATABASE_URL` at it — Docker Desktop, a native Windows install, or a hosted one. The last would change the URL away from `localhost`. Then run the first migration and fix what it finds.
+5. Provision one escrow through Circle and check the address it returns. The credentials and the wallet set are ready; this is the first call that has never been made.
+6. Creator dashboard: `/claim` lookup, About-page verification token, authenticated withdrawal with the 96/4 split. Their tables already exist in migration 001.
+7. Walk a real watch page end to end, through a tip that lands on testnet.
 
 ## Known Gaps
 - The Postgres store and migrations are unrun, and the Circle client is uncalled. Only the first is still blocked on this machine — Circle is configured and merely untried.

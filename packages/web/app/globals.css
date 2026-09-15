@@ -1,0 +1,303 @@
+@import "tailwindcss";
+
+/*
+ * Tipee — the warm expression.
+ *
+ * The extension speaks a cool, austere version of this language: sage ground,
+ * monospace everywhere, a dark forest green. The site deliberately warms it,
+ * because a landing page and a 360px popup are not doing the same job. A popup
+ * is a tool somebody already chose; a landing page has to be liked before it is
+ * read.
+ *
+ * Two things carry across unchanged so the two still read as one product: the
+ * forest green, and the corner-tick motif. Everything else warms — the ground
+ * moves from sage to cream, body type from mono to a friendly grotesque, and
+ * corners round off. Monospace is kept, but demoted to the job it is actually
+ * best at: amounts, addresses, handles and code.
+ */
+@theme {
+  /* Ground and surfaces ------------------------------------------------- */
+  --color-cream: #fffbf4;      /* page ground — warm, never white */
+  --color-card: #ffffff;       /* raised surfaces */
+  --color-tint: #fbf5ea;       /* insets, secondary fill */
+  --color-shell: #f6efe2;      /* section bands, browser chrome */
+  --color-rule: #ece3d4;       /* hairlines */
+
+  /* Brand --------------------------------------------------------------- */
+  --color-forest: #1c7a34;     /* primary action — kept from the extension */
+  --color-leaf: #34a853;       /* hover, lighter green */
+  --color-deep: #0f4a20;       /* pressed, dark green surfaces */
+  --color-mint: #cdf5c4;       /* money-positive fill */
+  --color-butter: #ffd24a;     /* warm accent — highlights, illustration */
+  --color-peach: #ffc9a3;      /* second accent, illustration only */
+  --color-sky: #bfe0ff;        /* third accent, illustration only */
+
+  /* Text ---------------------------------------------------------------- */
+  --color-ink: #171f12;
+  --color-muted: #515f4a;      /* body secondary — ~7:1 on cream */
+  --color-faint: #6b7864;      /* labels, captions — ~4.5:1 on cream */
+  --color-on-forest: #fffdf7;
+  --color-danger: #b3401a;
+
+  /* Type ---------------------------------------------------------------- */
+  --font-sans: var(--font-jakarta), "Segoe UI", system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "Cascadia Mono", monospace;
+
+  --text-hero: clamp(2.6rem, 6.2vw, 4.75rem);
+  --text-hero--line-height: 1.02;
+  --text-hero--letter-spacing: -0.035em;
+  /* For a hero that shares its row with a product shot. The full --text-hero
+     is sized for a headline with the page to itself; in a half-width column it
+     wraps to five lines and stops being a headline. */
+  --text-hero-sm: clamp(2.15rem, 3.7vw, 3.35rem);
+  --text-hero-sm--line-height: 1.06;
+  --text-hero-sm--letter-spacing: -0.032em;
+
+  --text-display: clamp(1.9rem, 3.8vw, 2.9rem);
+  --text-display--line-height: 1.08;
+  --text-display--letter-spacing: -0.03em;
+  --text-section: clamp(1.5rem, 2.6vw, 2.1rem);
+  --text-section--line-height: 1.14;
+  --text-section--letter-spacing: -0.025em;
+
+  /* Shape — rounder than the extension, which is most of the warmth. ----- */
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+  --radius-pill: 999px;
+
+  /* Shadows are warm-tinted, never neutral grey — a cool shadow on a cream
+     ground reads as dirt. */
+  --shadow-soft: 0 1px 2px rgba(60, 42, 20, 0.04), 0 8px 24px -12px rgba(60, 42, 20, 0.14);
+  --shadow-lift: 0 2px 4px rgba(60, 42, 20, 0.05), 0 18px 40px -18px rgba(60, 42, 20, 0.22);
+  --shadow-float: 0 4px 8px rgba(60, 42, 20, 0.06), 0 34px 70px -28px rgba(60, 42, 20, 0.3);
+}
+
+html {
+  background: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--color-cream);
+  overflow-x: hidden;
+}
+
+/* A shorter measure than the usual 65–75ch; this type is set large. */
+.prose-measure {
+  max-width: 58ch;
+}
+
+/*
+ * The corner ticks, carried over from the extension and softened.
+ *
+ * Talise marks an edge with four corner marks instead of a border. The
+ * extension draws it with eight gradient layers so no extra elements need
+ * positioning; the same trick works here, with the ticks pulled longer because
+ * everything they frame is bigger.
+ */
+.bracket {
+  --tick: 14px;
+  --hair: 2px;
+  --mark: var(--color-forest);
+  padding: 10px;
+  background:
+    linear-gradient(var(--mark), var(--mark)) 0 0 / var(--tick) var(--hair) no-repeat,
+    linear-gradient(var(--mark), var(--mark)) 0 0 / var(--hair) var(--tick) no-repeat,
+    linear-gradient(var(--mark), var(--mark)) 100% 0 / var(--tick) var(--hair) no-repeat,
+    linear-gradient(var(--mark), var(--mark)) 100% 0 / var(--hair) var(--tick) no-repeat,
+    linear-gradient(var(--mark), var(--mark)) 0 100% / var(--tick) var(--hair) no-repeat,
+    linear-gradient(var(--mark), var(--mark)) 0 100% / var(--hair) var(--tick) no-repeat,
+    linear-gradient(var(--mark), var(--mark)) 100% 100% / var(--tick) var(--hair) no-repeat,
+    linear-gradient(var(--mark), var(--mark)) 100% 100% / var(--hair) var(--tick) no-repeat;
+}
+
+.bracket-butter {
+  --mark: var(--color-butter);
+}
+
+/*
+ * Warm light behind the hero. Two soft radial washes rather than an image —
+ * they cost nothing, scale to any viewport, and cannot arrive late.
+ */
+/*
+ * z-index 0, not -1. A negative-z child of a section that creates no stacking
+ * context of its own paints behind the root background rather than behind its
+ * own parent's content — which is to say, invisibly. The hero content above it
+ * carries `relative z-10` instead.
+ */
+.aurora {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.aurora::before,
+.aurora::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(72px);
+}
+
+.aurora::before {
+  width: 46rem;
+  height: 46rem;
+  top: -22rem;
+  right: -14rem;
+  background: radial-gradient(circle, rgba(255, 210, 74, 0.5), rgba(255, 210, 74, 0) 68%);
+}
+
+.aurora::after {
+  width: 40rem;
+  height: 40rem;
+  top: -10rem;
+  left: -18rem;
+  background: radial-gradient(circle, rgba(52, 168, 83, 0.28), rgba(52, 168, 83, 0) 68%);
+}
+
+/*
+ * Scroll reveal. The attribute is set by components/reveal.tsx, which only ever
+ * moves it to "in" — nothing animates back out on scroll-up, because content
+ * that disappears when you scroll past it is a bug, not an effect.
+ *
+ * The hidden state is gated behind `.js`, a class an inline script in the
+ * document head adds before first paint. Without that gate, `opacity: 0` is the
+ * state shipped in the HTML itself, and any reader whose JavaScript did not run
+ * — a failed chunk, an old browser, a script blocker, a crawler — gets a hero
+ * followed by an entire page of invisible content. Gating it means the
+ * no-JavaScript rendering is simply the finished page with no animation, which
+ * is the correct fallback.
+ */
+.js [data-reveal] {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.js [data-reveal="in"] {
+  opacity: 1;
+  transform: none;
+}
+
+@keyframes tipee-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(28, 122, 52, 0.4);
+  }
+  50% {
+    transform: scale(1.06);
+    box-shadow: 0 0 0 10px rgba(28, 122, 52, 0);
+  }
+}
+
+@keyframes tipee-caret {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  55%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes tipee-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+  18% {
+    opacity: 1;
+    transform: none;
+  }
+  82% {
+    opacity: 1;
+    transform: translateY(-10px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+}
+
+@keyframes tipee-drift {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes tipee-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-pulse-ring {
+  animation: tipee-pulse 1.8s ease-in-out infinite;
+}
+.animate-caret {
+  animation: tipee-caret 1s steps(1) infinite;
+}
+.animate-rise {
+  animation: tipee-rise 2.6s ease-out infinite;
+}
+.animate-drift {
+  animation: tipee-drift 6s ease-in-out infinite;
+}
+.animate-marquee {
+  animation: tipee-marquee 32s linear infinite;
+}
+
+:focus-visible {
+  outline: 2.5px solid var(--color-forest);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: var(--color-mint);
+  color: var(--color-ink);
+}
+
+/*
+ * Everything decorative stops. The product demos read this too — they freeze on
+ * their most informative frame rather than looping, so a reader who cannot
+ * tolerate motion still sees what the product does.
+ */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .js [data-reveal] {
+    opacity: 1;
+    transform: none;
+  }
+}
