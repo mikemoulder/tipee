@@ -3,7 +3,8 @@
 ## Status
 - Date: 2026-10-11
 - Current milestone: **Porting from Arc to Stellar** on branch `stellar-port`, for the Find Your Way hackathon (General Track, deadline 2026-10-12 23:59). The port plan lives at `../port-plan.md` beside this repo.
-- Done: contracts (deployed, 17 Rust tests), `@tipee/shared`, `@tipee/api` and `@tipee/extension` are all on Stellar. `npm test` passes **333 in 22 files**; `tsc --build` is clean; the extension builds.
+- Done: escrow contract (deployed, 8 Rust tests), `@tipee/shared`, `@tipee/api` and `@tipee/extension` are all on Stellar. `npm test` passes **339**; `tsc --build` is clean; the extension builds.
+- **2026-10-12: wallets moved to OpenZeppelin smart accounts** (branch `oz-smart-accounts`), at the owner's request to use Stellar's official stack rather than our own wallet contract. See *Wallets: OpenZeppelin smart accounts* below.
 - Proven live on testnet: `scripts/verify-chain.mjs` (API path, ~19 s) and `scripts/e2e-extension.mjs` (the built extension in real Chrome: onboarding → wallet deployed + 10 USDC faucet in ~11 s → tip 1.50 USDC via the composer, confirmed ~8 s after signing → activity shows "Tipped @fireship"). A live claim paid 1.92 net / 0.08 fee.
 - Next: `/claim` page on the website, site copy Arc → Stellar, deploy the API somewhere public, README, demo video.
 - Overall status: In progress. Everything below *Stellar Facts* describes the Arc build and is history until the port lands.
@@ -22,7 +23,17 @@
 
 Secrets live only in the Stellar CLI's key store on the dev machine (`stellar keys show <name>`), never in the repo.
 
-**Spike result.** `scripts/spike-wallet.mjs` deploys a wallet for a fresh ed25519 key, funds it with 5 USDC (no trustline, no XLM), and tips 2 USDC through the escrow. The owner key signs only the auth entry, and the relayer is the transaction source and pays the fee. Each step takes about 5 s. Proof: tip tx `9ee6ea9d868ac14e3ee82562b773a59c16bbc48f0ffeb21b8ad839308d0699f6`.
+**Wallets: OpenZeppelin smart accounts** (2026-10-12)
+- The contracts `stellar/smart-account-kit` deployed to testnet (docs/deployments-protocol-27-2026-07-09.md in that repo): account wasm `1b5f4534…785a`, Ed25519 verifier `CAAVTMCB…HKN4`, WebAuthn verifier `CC7EKIHQ…OM3F`, spending-limit policy `CABXBYJN…TIP5G`. Constants in `shared/src/stellar.ts`.
+- Deployed by the relayer with `salt = sha256(owner)` (so `walletAddressFor` is unchanged) and constructor `(signers: [External(ed25519 verifier, owner key)], policies: {})`, which makes context rule 0.
+- Signing (`extension/src/chain/account.ts`): `authorizeEntry` with a callback returning `AuthPayload { context_rule_ids, signers: { signer: sig } }`, where `sig = ed25519(sha256(signature_payload ‖ xdr(scvVec(ids))))` and there is one rule id per authorised call (a tip is 2: `tip` + the USDC transfer). Same formula as the kit's `computeEntryAuthDigest`.
+- The kit package itself is not a dependency: it pins `@stellar/stellar-sdk` 16 and its wallet creation is passkey/browser-page oriented, while our signing runs in an MV3 service worker on SDK 17. We use its deployed contracts and its documented format.
+- `/api/relay` now allows the account's own admin functions (`WALLET_ADMIN_FUNCTIONS`: context rules, signers, policies), never `execute` or `upgrade`.
+- `contracts/wallet` (our custom account) is removed; it is in git history (commit 6266515).
+- Proven: `scripts/spike-oz-account.mjs` (tip `21acf15a…`), `verify-chain.mjs` against the branch API, and `e2e-extension.mjs` in Chrome: onboarding, tip `8834873…`, and a popup withdrawal `d4126d77…`.
+- Wallets made by v0.2.0 (our old contract) are not relayed any more. Testnet only, so they are abandoned, not migrated.
+
+**Earlier spike (superseded).** `scripts/spike-wallet.mjs` (removed) deployed a wallet for a fresh ed25519 key, funds it with 5 USDC (no trustline, no XLM), and tips 2 USDC through the escrow. The owner key signs only the auth entry, and the relayer is the transaction source and pays the fee. Each step takes about 5 s. Proof: tip tx `9ee6ea9d868ac14e3ee82562b773a59c16bbc48f0ffeb21b8ad839308d0699f6`.
 
 **Decisions made during the port**
 - Accounting stays at **6 decimals**; only the chain layer works in Stellar's 7 (`toStroops` / `fromStroops` in `shared/src/stellar.ts`). Going up is exact, so fees, limits, DB columns and most tests did not move. Balances truncate the 7th decimal for display.

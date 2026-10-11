@@ -6,11 +6,14 @@
  *
  * - **USDC**, Circle's testnet asset, reached through its Stellar Asset
  *   Contract. A contract address holds it without a trustline or an XLM
- *   reserve, which is the whole reason gifter wallets are contracts.
+ *   reserve, which is the whole reason gifter wallets are contract accounts.
  * - **The escrow**, which holds tips by YouTube channel ID until the creator
  *   claims. One contract for every creator; nobody is provisioned a wallet.
- * - **The wallet code**, deployed once per gifter. Its owner is the ed25519 key
- *   the extension derives from the seed phrase and keeps PIN-encrypted.
+ * - **The wallet**: an OpenZeppelin smart account, deployed once per gifter
+ *   from the account code `stellar/smart-account-kit` uploaded to testnet. Its
+ *   default context rule holds one signer, `External(Ed25519 verifier, key)`,
+ *   where the key is the one the extension derives from the seed phrase and
+ *   keeps PIN-encrypted.
  * - **The relayer**, a plain account that submits every transaction and pays
  *   every fee, and deploys each gifter's wallet. Gifters never hold XLM.
  *
@@ -29,7 +32,18 @@ export const USDC_ISSUER = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLL
 export const USDC_CONTRACT_ID = 'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA'
 
 export const ESCROW_CONTRACT_ID = 'CB7OEDRTDDPLG37HWY76OQQYOO56P3R3CAAWX5IUSJXIAC3IDZ7OKGUV'
-export const WALLET_WASM_HASH = '611b9ad888839007cdc9726151475bf79f6a7e4e780fad739c87dd6fce1ce9a2'
+/**
+ * OpenZeppelin smart-account contracts on testnet, as recorded by
+ * `stellar/smart-account-kit` in docs/deployments-protocol-27-2026-07-09.md
+ * (built from OpenZeppelin/stellar-contracts@1e513890).
+ */
+export const WALLET_WASM_HASH = '1b5f4534a76322da2ad7c745f6900857a6802b0ca79850c35a03561df997785a'
+export const ED25519_VERIFIER_ID = 'CAAVTMCBXEIBPR64EAASKFXERVPYFZA2JYP5A3BG6PESWEFUJX5IHKN4'
+export const WEBAUTHN_VERIFIER_ID = 'CC7EKIHQP3TN4CARQDND6CEOY2UXLWWC2X5GHTD5NLAT7BG5GPZIOM3F'
+export const SPENDING_LIMIT_POLICY_ID = 'CABXBYJNZ7IUW4G3D6BND5YCAQF3ASSDMDAOKQQ63UYFSO7WUU2TIP5G'
+
+/** The account's default context rule, created by its constructor. */
+export const DEFAULT_CONTEXT_RULE_ID = 0
 export const RELAYER_ADDRESS = 'GCBOETCF6JUQIVT46TOINOEESGRK536Q3DNS57BNNKDQJ24A4RAEA27L'
 
 /**

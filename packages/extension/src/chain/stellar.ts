@@ -24,13 +24,14 @@ import {
   type RelayResponse,
 } from '@tipee/shared'
 
+import { accountSigner } from './account'
 import { apiBase } from './creators'
 
 /**
  * Tipee on Stellar, from the gifter's side.
  *
- * The gifter's wallet is a contract (`C…`) whose owner is an ed25519 key the
- * extension derives from the seed phrase. That key never pays for anything
+ * The gifter's wallet is an OpenZeppelin smart account (`C…`) whose signer is
+ * an Ed25519 key the extension derives from the seed phrase. That key never pays for anything
  * and never holds XLM. What it does is sign **authorisations**: when the wallet
  * tips or sends, the extension simulates the call, gets back the one auth
  * entry the wallet must sign, signs that and only that, and hands the
@@ -161,8 +162,17 @@ export async function authorise(op: xdr.Operation, owner: Keypair): Promise<{ fu
     throw new NetworkUnavailableError()
   }
 
+  // Each entry is signed as the OpenZeppelin account expects: an AuthPayload
+  // over the auth digest (see ./account), not a plain account signature.
   const signed = await Promise.all(
-    entries.map((entry) => authorizeEntry(entry, owner, latest.sequence + AUTH_VALID_LEDGERS, STELLAR_NETWORK_PASSPHRASE)),
+    entries.map((entry) =>
+      authorizeEntry(
+        entry,
+        accountSigner(owner, entry) as unknown as Parameters<typeof authorizeEntry>[1],
+        latest.sequence + AUTH_VALID_LEDGERS,
+        STELLAR_NETWORK_PASSPHRASE,
+      ),
+    ),
   )
 
   const body = xdr.Operation.fromXDR(op.toXDR('base64'), 'base64').body as unknown as {

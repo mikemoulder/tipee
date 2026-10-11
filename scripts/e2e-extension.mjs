@@ -1,6 +1,6 @@
 // Drives the built extension in real Chrome, end to end on Stellar testnet:
 // onboarding (PIN, seed phrase, seed check), wallet deployment and faucet,
-// a tip through the composer, and the activity list afterwards.
+// a tip through the composer, the activity list, and a withdrawal from the popup.
 //
 //   npm i --no-save puppeteer-core
 //   VITE_TIPEE_API=http://localhost:3000 npm run build -w @tipee/extension
@@ -110,6 +110,25 @@ try {
   const rows = await page.$$eval('.movement:not(.skeleton) .movement-title', (els) => els.map((el) => el.textContent))
   log(`activity: ${JSON.stringify(rows)}; balance ${await page.$eval('#balance', (el) => el.textContent)}`)
   await page.screenshot({ path: `${SHOTS}/5-activity.png` })
+
+  // Withdraw 1 USDC to another smart account through the popup's send flow.
+  const TO = process.env.SEND_TO ?? 'CDX5P45VJWOFCIYYNBBJYOX3KDVT7WX7FATDVJ45CMVBMRAYL6ONEIXW'
+  await page.click('#withdraw')
+  await page.waitForSelector('#to')
+  await page.type('#to', TO)
+  await page.type('#amount', '1')
+  await page.click('#review')
+  await page.waitForFunction(() => !document.querySelector('#confirm')?.disabled, { timeout: 30000 })
+  log(`review: ${await page.$eval('#sim', (el) => el.textContent.trim())}`)
+  await page.click('#confirm')
+  await page.waitForSelector('#pin, #receipt', { timeout: 30000 })
+  if (await page.$('#pin')) {
+    await page.type('#pin', PIN)
+    await page.click('#send')
+  }
+  await page.waitForSelector('#receipt', { timeout: 90000 })
+  log(`withdraw sent: ${await page.$eval('#receipt', (el) => el.href)}`)
+  await page.screenshot({ path: `${SHOTS}/6-sent.png` })
 } finally {
   await browser.close()
 }

@@ -15,8 +15,8 @@ export function BuiltOn() {
   const marks = [
     {
       name: 'Stellar',
-      claim: 'Smart wallets, no XLM',
-      body: 'Your Tipee wallet is a Soroban contract account. It holds USDC with no trustline and no XLM reserve, and Tipee pays every network fee — so you never need a second token before you can give someone a dollar.',
+      claim: 'Smart accounts, no XLM',
+      body: 'Your Tipee wallet is an OpenZeppelin smart account on Stellar — the account Stellar’s own smart-account kit deploys. It holds USDC with no trustline and no XLM reserve, and Tipee pays every network fee, so you never need a second token before you can give someone a dollar.',
     },
     {
       name: 'Soroban escrow',

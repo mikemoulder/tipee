@@ -78,8 +78,8 @@ describe('what the relayer will pay for', () => {
     )
   })
 
-  it('relays a wallet changing its own session', async () => {
-    const fn = hostFunction(WALLET, 'revoke_session')
+  it('relays a wallet managing its own context rules', async () => {
+    const fn = hostFunction(WALLET, 'remove_context_rule', nativeToScVal(1, { type: 'u32' }))
     await expect(checkRelayable(fn, [addressAuth(WALLET)], RELAYER_ADDRESS)).resolves.toBe(WALLET)
   })
 
@@ -108,6 +108,14 @@ describe('what the relayer will pay for', () => {
 
   it('refuses an unsigned call', async () => {
     await expect(checkRelayable(tip(WALLET), [], RELAYER_ADDRESS)).rejects.toThrow(RelayRefusedError)
+  })
+
+  it('refuses execute and upgrade, even on the wallet itself', async () => {
+    for (const name of ['execute', 'upgrade']) {
+      await expect(checkRelayable(hostFunction(WALLET, name), [addressAuth(WALLET)], RELAYER_ADDRESS)).rejects.toThrow(
+        RelayRefusedError,
+      )
+    }
   })
 
   it('refuses any other contract or function', async () => {

@@ -14,6 +14,7 @@ import {
 } from '@stellar/stellar-sdk'
 
 import {
+  ED25519_VERIFIER_ID,
   ESCROW_CONTRACT_ID,
   STELLAR_NETWORK_PASSPHRASE,
   USDC_CONTRACT_ID,
@@ -153,7 +154,7 @@ export function stellarGateway(keys: StellarKeys): StellarGateway {
     return next
   }
 
-  /** Whether `address` is a contract running Tipee's wallet code. */
+  /** Whether `address` is an OpenZeppelin smart account running the expected code. */
   async function isTipeeWallet(address: string): Promise<boolean> {
     if (!StrKey.isValidContract(address)) return false
     let found
@@ -244,7 +245,10 @@ export function stellarGateway(keys: StellarKeys): StellarGateway {
           address: Address.fromString(relayer.publicKey()),
           wasmHash: Buffer.from(WALLET_WASM_HASH, 'hex'),
           salt,
-          constructorArgs: [nativeToScVal(Buffer.from(StrKey.decodeEd25519PublicKey(owner)), { type: 'bytes' })],
+          // OpenZeppelin smart account: signers for the default context rule,
+          // and no policies. The one signer is the owner's Ed25519 key behind
+          // the shared Ed25519 verifier.
+          constructorArgs: [xdr.ScVal.scvVec([ed25519Signer(owner)]), xdr.ScVal.scvMap([])],
         }),
       )
       return { address, deployed: true, txHash: done.hash }
@@ -293,6 +297,30 @@ export function stellarGateway(keys: StellarKeys): StellarGateway {
   }
 }
 
+/** `Signer::External(ed25519_verifier, key)`, as the account contract encodes it. */
+export function ed25519Signer(owner: string): xdr.ScVal {
+  return xdr.ScVal.scvVec([
+    xdr.ScVal.scvSymbol('External'),
+    Address.fromString(ED25519_VERIFIER_ID).toScVal(),
+    xdr.ScVal.scvBytes(Buffer.from(StrKey.decodeEd25519PublicKey(owner))),
+  ])
+}
+
+/**
+ * The account functions a wallet may call on itself through the relay: the
+ * owner managing context rules, signers and policies (the quick-tip key and its
+ * spending limit). `execute` and `upgrade` are deliberately absent.
+ */
+export const WALLET_ADMIN_FUNCTIONS = new Set([
+  'add_context_rule',
+  'remove_context_rule',
+  'update_context_rule_valid_until',
+  'add_signer',
+  'remove_signer',
+  'add_policy',
+  'remove_policy',
+])
+
 /**
  * What the relayer will pay for, and nothing else. Returns the wallet whose
  * authority the invocation runs under, for the caller to check is a Tipee
@@ -300,8 +328,8 @@ export function stellarGateway(keys: StellarKeys): StellarGateway {
  *
  * - `escrow.tip(wallet, …)`: a tip.
  * - `usdc.transfer(wallet, to, amount)`: a withdrawal out of a wallet.
- * - `wallet.set_session(…)` / `wallet.revoke_session()`: the owner managing
- *   their quick-tip key.
+ * - one of `WALLET_ADMIN_FUNCTIONS` on the wallet itself: the owner managing
+ *   their account's rules, signers and policies.
  *
  * Every auth entry must be an address credential for that wallet. A
  * source-account credential would authorise *as the relayer*, which is the one
@@ -325,7 +353,7 @@ export async function checkRelayable(
     wallet = Address.fromScVal(args[0] as xdr.ScVal).toString()
   } else if (target === USDC_CONTRACT_ID && fn === 'transfer' && args.length === 3) {
     wallet = Address.fromScVal(args[0] as xdr.ScVal).toString()
-  } else if ((fn === 'set_session' || fn === 'revoke_session') && StrKey.isValidContract(target)) {
+  } else if (WALLET_ADMIN_FUNCTIONS.has(fn) && StrKey.isValidContract(target)) {
     wallet = target
   } else {
     throw new RelayRefusedError('Tipee only relays tips, withdrawals and wallet settings.')

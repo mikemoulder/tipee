@@ -5,7 +5,7 @@
  * Does what the extension does, in order, with a brand-new key:
  *
  *   1. resolve a real YouTube handle to its channel ID       GET  /api/creators/resolve
- *   2. deploy a wallet contract owned by the new key          POST /api/wallets
+ *   2. deploy an OpenZeppelin smart account for the new key   POST /api/wallets
  *   3. take testnet USDC from the faucet                      POST /api/faucet
  *   4. tip through the escrow: simulate, sign only the
  *      wallet's auth entry, hand it to the relayer            POST /api/relay
@@ -18,7 +18,7 @@
  */
 
 import {
-  Address, BASE_FEE, Contract, Keypair, TransactionBuilder, authorizeEntry, nativeToScVal, rpc, xdr,
+  Address, BASE_FEE, Contract, Keypair, TransactionBuilder, authorizeEntry, hash, nativeToScVal, rpc, xdr,
 } from '@stellar/stellar-sdk'
 
 const API = (process.env.API ?? 'http://localhost:3000').replace(/\/+$/, '')
@@ -27,6 +27,35 @@ const RPC = 'https://soroban-testnet.stellar.org'
 const PASSPHRASE = 'Test SDF Network ; September 2015'
 const ESCROW = 'CB7OEDRTDDPLG37HWY76OQQYOO56P3R3CAAWX5IUSJXIAC3IDZ7OKGUV'
 const RELAYER = 'GCBOETCF6JUQIVT46TOINOEESGRK536Q3DNS57BNNKDQJ24A4RAEA27L'
+const ED25519_VERIFIER = 'CAAVTMCBXEIBPR64EAASKFXERVPYFZA2JYP5A3BG6PESWEFUJX5IHKN4'
+
+/**
+ * The wallet is an OpenZeppelin smart account, so its signature is an
+ * AuthPayload over the auth digest, every call approved by context rule 0.
+ * Same scheme as packages/extension/src/chain/account.ts.
+ */
+function accountSigner(owner, entry) {
+  const count = (inv) => 1 + inv.subInvocations.reduce((n, sub) => n + count(sub), 0)
+  const ids = Array(count(entry.rootInvocation)).fill(0)
+  const idsVal = () => xdr.ScVal.scvVec(ids.map((id) => xdr.ScVal.scvU32(id)))
+  const signer = xdr.ScVal.scvVec([
+    xdr.ScVal.scvSymbol('External'),
+    Address.fromString(ED25519_VERIFIER).toScVal(),
+    xdr.ScVal.scvBytes(owner.rawPublicKey()),
+  ])
+  return async (_preimage, payload) => {
+    const digest = hash(Buffer.concat([Buffer.from(payload), Buffer.from(idsVal().toXDR())]))
+    return {
+      signatureScVal: xdr.ScVal.scvMap([
+        new xdr.ScMapEntry({ key: xdr.ScVal.scvSymbol('context_rule_ids'), val: idsVal() }),
+        new xdr.ScMapEntry({
+          key: xdr.ScVal.scvSymbol('signers'),
+          val: xdr.ScVal.scvMap([new xdr.ScMapEntry({ key: signer, val: xdr.ScVal.scvBytes(owner.sign(digest)) })]),
+        }),
+      ]),
+    }
+  }
+}
 
 const server = new rpc.Server(RPC)
 const t0 = Date.now()
@@ -74,7 +103,9 @@ const sim = await server.simulateTransaction(draft)
 if (rpc.Api.isSimulationError(sim)) throw new Error(sim.error)
 
 const { sequence } = await server.getLatestLedger()
-const auth = await Promise.all(sim.result.auth.map((entry) => authorizeEntry(entry, owner, sequence + 60, PASSPHRASE)))
+const auth = await Promise.all(
+  sim.result.auth.map((entry) => authorizeEntry(entry, accountSigner(owner, entry), sequence + 60, PASSPHRASE)),
+)
 const func = draft.operations[0].func
 
 const relayed = await call('POST', '/api/relay', {

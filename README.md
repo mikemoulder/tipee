@@ -2,7 +2,7 @@
 
 **Tip any YouTube creator in USDC from the video page, in one click. No seed phrase to start, no XLM ever, and the creator doesn't need to have heard of Tipee.**
 
-A Chrome extension adds a gift button beside Like. The tip goes into a Soroban escrow contract on Stellar, held under the creator's YouTube **channel ID** until they prove the channel is theirs and claim it. Gifters hold USDC in a Soroban **smart wallet**: no trustline, no XLM reserve, and Tipee's relayer pays every network fee.
+A Chrome extension adds a gift button beside Like. The tip goes into a Soroban escrow contract on Stellar, held under the creator's YouTube **channel ID** until they prove the channel is theirs and claim it. Gifters hold USDC in an **OpenZeppelin smart account**, the account contract Stellar's [smart-account-kit](https://github.com/stellar/smart-account-kit) deploys: no trustline, no XLM reserve, and Tipee's relayer pays every network fee.
 
 > Stellar **testnet**. Built for *Find Your Way* (General Track). Started on Circle's Arc in September and ported to Stellar for this hackathon: the contracts, the smart-wallet onboarding, the relayer and the claim flow are new. See [What was built when](#what-was-built-when).
 
@@ -30,7 +30,7 @@ A small creator can't take Super Thanks until they qualify for YouTube's Partner
 | Piece | What it does | Remove it and… |
 | --- | --- | --- |
 | **Soroban escrow** (`contracts/escrow`) | `tip(from, channel_id, amount, note)` moves USDC in and emits the note in the same event. `claim(channel_id, to)` pays out, verifier only, fee floored exactly like `packages/shared/src/fees.ts`. Channel IDs are validated on chain. | Creators would need a wallet before they could be tipped, or Tipee would hold their money. |
-| **Soroban smart wallet** (`contracts/wallet`) | A custom account (`__check_auth`) owned by the extension's ed25519 key. An optional *session key* may only call `escrow.tip` under a daily cap, enforced on chain. | Gifters would need XLM, a trustline and a reserve before their first tip. |
+| **OpenZeppelin smart account** (the contracts `stellar/smart-account-kit` deployed to testnet: account wasm `1b5f4534…`, Ed25519 verifier `CAAVTMCB…`) | Each gifter gets their own account. Its default context rule holds one signer, `External(Ed25519 verifier, key)`, where the key is derived from the gifter's phrase. The extension signs the account's `AuthPayload` over the Protocol 27 auth digest ([`chain/account.ts`](packages/extension/src/chain/account.ts)). | Gifters would need XLM, a trustline and a reserve before their first tip. |
 | **Stellar Asset Contract for USDC** | A contract address holds USDC with no trustline or reserve. | Same as above. |
 | **Relayer as transaction source** | The gifter signs auth entries only; the relayer builds, pays for and submits. The signature covers the invocation, network and expiry, so the relayer can't alter it. | The gifter pays fees in XLM. |
 | **Protocol 27 address-bound credentials** | Testnet simulation returns `sorobanCredentialsAddressV2` auth entries; `@stellar/stellar-sdk` 17.1 signs the address-bound payload. | Older SDKs sign the wrong payload and the wallet rejects it. |
@@ -40,6 +40,7 @@ Why Stellar and not another chain: USDC is native, and five-second finality make
 ## What is real, and what is trusted
 
 - **Real, on testnet:** contracts, wallets, every tip and claim, the faucet (real Circle testnet USDC bought on the testnet DEX), YouTube channel resolution, ownership verification against the live channel page.
+- **Audit scope:** the OpenZeppelin account contracts are audited, but the testnet build is a later revision than the audited one; the escrow and Tipee's integration are unaudited. Testnet only.
 - **Trusted:** the verifier key. The escrow only pays out with its signature, and the API gives it only after the code is found in the channel description. The relayer pays fees but can't move a gifter's money; `/api/relay` refuses source-account credentials and anything that names the relayer ([`checkRelayable`](packages/api/src/stellar.ts), with tests).
 - **Not built:** mainnet, Chrome Web Store listing, cash-out to local currency (a Stellar anchor would do this; it's in the pitch, not the code).
 
@@ -69,19 +70,19 @@ API=http://localhost:3000 node scripts/verify-chain.mjs @fireship   # resolve �
 
 | Path | |
 | --- | --- |
-| `contracts/escrow`, `contracts/wallet` | Soroban contracts (Rust, `soroban-sdk` 28). `cargo test` (17 tests), `stellar contract build`. |
+| `contracts/escrow` | The escrow (Rust, `soroban-sdk` 28). `cargo test` (8 tests), `stellar contract build`. Wallets are OpenZeppelin's audited account contracts, not ours. |
 | `packages/extension` | Manifest V3 extension: content script, composer, wallet popup, SEP-5 keystore, Stellar chain layer. |
 | `packages/api` | Fastify: resolution, relay, wallets, faucet, verification, claims. |
 | `packages/shared` | Money math, limits, YouTube parsing, testnet contract IDs. No runtime dependencies. |
 | `packages/web` | Next.js site with the live balance lookup and `/claim`. |
 | `scripts/verify-chain.mjs` | End-to-end against a running API on testnet. |
 | `scripts/e2e-extension.mjs` | Drives the built extension in real Chrome: onboarding, a tip, the activity list. |
-| `scripts/spike-wallet.mjs` | The first proof that a smart wallet could tip through the escrow with someone else paying. |
+| `scripts/spike-oz-account.mjs` | The proof that an OpenZeppelin account owned by an Ed25519 key tips through the escrow with the relayer paying. |
 
-`npm test` runs 333 tests across the TypeScript packages; `cargo test` in `contracts/` runs 17.
+`npm test` runs 339 tests across the TypeScript packages; `cargo test` in `contracts/` runs 8.
 
 ## What was built when
 
 Before this hackathon (September, on Arc): the extension shell, YouTube detection and gift button, composer, PIN-encrypted keystore, popup wallet, the API's channel resolution and tip records, and the marketing site.
 
-For this hackathon (October, on Stellar): both Soroban contracts, the smart-wallet model and SEP-5 keys, the relayer, faucet and relay security rules, Stellar tip verification, activity from contract events, channel verification and claims, the `/claim` page, and the live balance lookup. The full history is in `git log`.
+For this hackathon (October, on Stellar): the escrow contract, OpenZeppelin smart-account wallets with SEP-5 keys, the relayer, faucet and relay security rules, Stellar tip verification, activity from contract events, channel verification and claims, the `/claim` page, and the live balance lookup. The full history is in `git log`.
