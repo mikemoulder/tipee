@@ -42,10 +42,11 @@ Things the spike settled:
 - SDK 17 exposes XDR fields as properties (`entry.credentials.type`), not methods.
 - Wallets are deployed with `salt = sha256(owner public key)` from the relayer, so one owner key maps to one wallet address.
 
-**Deployed on this VPS** (2026-10-11)
-- `ops/run-api.sh` runs the API in a restart loop on `127.0.0.1:3477`, secrets from `~/.config/tipee/api.env` (mode 600, outside the repo). Logs: `~/logs/tipee/api.log`. Started with `setsid nohup ops/run-api.sh &`; it survives crashes, not reboots.
-- For reboots and HTTPS, the owner installs `ops/tipee-api.service` (systemd) and appends `ops/Caddyfile.snippet` to `/etc/caddy/Caddyfile` (needs root). The VPS's Caddy also fronts the owner's other services, so it is never edited from here, and its admin API is not used (changes there do not persist).
-- Public hostname: a duckdns name pointing at `173.212.238.167` (proposed `tipee-api.duckdns.org`).
+**Deployed** (2026-10-12)
+- API: `https://tipee-api.duckdns.org`, the systemd unit `tipee-api` (from `ops/tipee-api.service`) on `127.0.0.1:3477` behind the VPS's Caddy. Secrets in `~/.config/tipee/api.env` (mode 600). Logs: `journalctl -u tipee-api`. The VPS's Caddy also fronts the owner's other services, so it is never edited from here. The owner pasted the snippet twice once, which made the file invalid until the duplicate was removed. Validate with `caddy validate --config /etc/caddy/Caddyfile` after any edit.
+- Repo public; `main` = `stellar-port`. Release `v0.2.0` carries the extension zip built with `VITE_TIPEE_API=https://tipee-api.duckdns.org`; the downloaded zip passed `scripts/e2e-extension.mjs` in Chrome.
+- `ops/run-api.sh` remains as the no-root fallback.
+- Not yet: the Vercel site (owner imports with root `packages/web`, `NEXT_PUBLIC_TIPEE_API=https://tipee-api.duckdns.org`), a claim on a channel the owner controls, the demo video, and the in-platform submission.
 
 **Running it locally**
 ```sh
