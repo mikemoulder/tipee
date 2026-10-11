@@ -1,98 +1,75 @@
 # @tipee/api
 
-Creator resolution, escrow provisioning, and tip records. The only side that
-holds credentials, and the only side that talks to Circle.
+Creator resolution, the Stellar relayer, and creator claims. It is the only part
+of Tipee that holds keys, and it holds two:
 
-## Why these endpoints exist
+- **The relayer** (`RELAYER_SECRET`) is the source of every gifter transaction,
+  so it pays every fee and deploys every gifter's wallet. It never signs *for* a
+  gifter: a wallet authorises its own calls, and the relayer only submits them.
+- **The verifier** (`VERIFIER_SECRET`) is the only key the escrow contract
+  accepts for `claim`. The API uses it after a creator has proved they own the
+  channel, and for nothing else.
 
-Both of them exist because the client cannot be trusted with the answer.
+## Routes
 
-- **`GET /api/creators/resolve?handle=@creator`** turns a handle into a channel
-  ID here, by fetching the channel page from YouTube. A handle is re-assignable
-  — YouTube releases abandoned ones — and a client-supplied channel ID could
-  simply name somebody else's escrow. The escrow wallet belongs to the channel
-  ID and never moves when a creator renames.
+| Route | What it does | Why it is server-side |
+| --- | --- | --- |
+| `GET /api/creators/resolve?handle=@x` | Handle → channel ID (read from YouTube), plus the escrow balance read from chain | A handle can be reassigned, and a client-supplied channel ID could point a tip at someone else |
+| `POST /api/tips` | Records a tip after re-reading the transaction's escrow `tip` event | The body is a claim; the chain is the fact |
+| `POST /api/wallets` | Deploys the wallet contract for an owner key (idempotent) | The relayer pays for the deployment |
+| `POST /api/faucet` | Sends testnet USDC to a wallet holding under 1 USDC | The relayer holds the USDC |
+| `POST /api/relay` | Submits a wallet-signed invocation, relayer paying | The gifter holds no XLM |
+| `POST /api/creators/verify/init` | Issues a one-hour code to put in the channel description | |
+| `POST /api/creators/verify/confirm` | Finds the code on `youtube.com/channel/<id>/about` | |
+| `POST /api/creators/claim` | Spends the code once; the verifier calls `escrow.claim` | Only the verifier key can release escrow |
 
-- **`POST /api/tips`** re-reads the transaction from Arc and records the amount
-  that actually reached that creator's escrow. The body is a claim; believing
-  its `amount` would let anyone inflate a creator's balance to any figure they
-  liked. `tx_hash` is unique, so reporting one tip twice credits nobody twice.
+### What the relay will submit
+
+`/api/relay` is the one route that spends the relayer's money on a stranger's
+request, so it is narrow (`src/stellar.ts`, `checkRelayable`, tested in
+`src/stellar.test.ts`):
+
+- `escrow.tip(wallet, …)`, `usdc.transfer(wallet, …)`, or a wallet's own
+  `set_session` / `revoke_session`, and nothing else;
+- the acting wallet must be a contract running Tipee's wallet code (checked by
+  its wasm hash on chain);
+- every auth entry must be an address credential **for that wallet**. A
+  source-account credential would authorise *as the relayer*, so it is refused,
+  as is anything naming the relayer.
 
 ## Running it
 
 ```sh
-cp .env.example .env      # at the repo root
-npm run migrate -w @tipee/api
-npm run dev -w @tipee/api
+export RELAYER_SECRET=S…   # funded testnet account holding some testnet USDC for the faucet
+export VERIFIER_SECRET=S…  # the escrow's verifier
+npm start -w @tipee/api
 ```
 
-Migrations also run at boot, so a deployment cannot drift from its schema.
-
-Without Circle credentials the service still starts and resolution answers
-`503 escrow_unavailable` — a laptop with no credentials should be able to run
-everything else, and the failure should be legible rather than a crash.
-
-Postgres 13 or newer. Nothing here needs an extension or a superuser, so it
-runs on a managed provider's default role — Neon, Supabase, Railway, or a local
-install.
-
-## Circle setup, once
-
-1. Copy your API key from [Circle console](https://console.circle.com/) into `.env` as `CIRCLE_API_KEY`.
-2. Generate an entity secret and the ciphertext the console asks to register:
-
-   ```sh
-   npm run circle:entity-secret -w @tipee/api
-   ```
-
-   It prints `CIRCLE_ENTITY_SECRET=…` for `.env` and a base64 ciphertext for the console's **Entity Secret Ciphertext** box. The console registers a ciphertext rather than the secret, and a ciphertext can only be built from the public key Circle serves to an authenticated caller — hence the API key first. Set `CIRCLE_ENTITY_SECRET` beforehand to re-encrypt a secret you already hold.
-
-3. **Download the recovery file** on the screen after Register. It is offered once; without it, a lost entity secret means permanently lost wallets and the funds in them.
-
-4. Create the wallet set every escrow derives from, and paste the ID it prints:
-
-   ```sh
-   npm run circle:wallet-set -w @tipee/api
-   ```
-
-One wallet set holds every creator's escrow, told apart by a `refId` of the
-YouTube channel ID. That is Circle's own guidance — a set is an organisational
-boundary, not a security one, and an account is capped at a thousand of them, so
-a set per creator would exhaust the account and buy nothing.
+With no `DATABASE_URL` it runs on the in-memory store and says so at boot. The
+chain is the record of every tip and every balance, so a restart loses
+bookkeeping, not money. With one, migrations run at boot (Postgres 13+).
 
 ## Environment
 
 | Variable | Required | Notes |
 | --- | --- | --- |
-| `DATABASE_URL` | yes | Postgres connection string. |
+| `RELAYER_SECRET` | yes | Pays fees, deploys wallets, funds the faucet. Its address is `RELAYER_ADDRESS` in `@tipee/shared`, which the extension uses to derive wallet addresses. |
+| `VERIFIER_SECRET` | for claims | Without it, claims answer 422 and boot logs a warning. |
+| `TREASURY_ADDRESS` | no | Shown on claim records. The escrow contract itself decides where the fee goes. |
+| `DATABASE_URL` | no | Postgres. In-memory when unset. |
+| `STELLAR_RPC_URL` | no | Defaults to `https://soroban-testnet.stellar.org`. |
+| `FAUCET_AMOUNT` | no | USDC per faucet request. Defaults to `10`. |
 | `PORT` | no | Defaults to 3000. |
-| `CIRCLE_API_KEY` | for escrow | All three Circle values or none. |
-| `CIRCLE_ENTITY_SECRET` | for escrow | 32 bytes of hex. Encrypted per request, never sent as-is. |
-| `CIRCLE_WALLET_SET_ID` | for escrow | Created once, reused for every creator. |
-| `CIRCLE_BLOCKCHAIN` | no | Defaults to `ARC-TESTNET`, Circle's code for Arc. Arc has no mainnet there yet. |
-| `TREASURY_ADDRESS` | for withdrawals | Destination for the 4% fee. Unused until §6. |
 
-## Status codes, and what they mean for a gifter
+## Status codes
 
 | Code | When | Retry? |
 | --- | --- | --- |
-| 400 | The request is malformed, or the tip is under 0.50 USDC | No |
-| 404 | No such channel, or a channel with no escrow here | No |
-| 422 | The transaction is real but paid this creator nothing | No |
+| 400 | Malformed request, or the relay refused the invocation | No |
+| 403 | Claim attempted on a code that was never found on the channel | No |
+| 404 | No such channel | No |
+| 409 | Faucet: wallet already funded. Verify: code not on the channel yet. Claim: nothing to claim, or code already used | Sometimes |
+| 410 | Verification code expired | No |
+| 422 | Stellar rejected the transaction, or a reported tip did not tip this creator | No |
 | 502 | YouTube could not be reached | Yes |
-| 503 | Circle unconfigured or down; or Arc would not answer | Yes |
-
-The 503 on a tip is deliberate: a transaction that is not yet mined and one that
-never existed look identical from here, so that case is never treated as a
-verdict on the tip.
-
-## Connecting the extension
-
-Settings → **Tipee service** → the base URL (`http://localhost:3000` locally).
-Until that is set, the extension refuses to send tips rather than guessing at a
-recipient.
-
-## Not done yet
-
-Verification (`/api/creators/verify/*`) and withdrawals (`/api/creators/withdraw`)
-are plan.md §6. Their tables exist in the first migration; the routes do not.
+| 503 | Stellar would not answer | Yes |
