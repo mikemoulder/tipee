@@ -12,6 +12,8 @@ A Chrome extension adds a gift button beside Like. The tip goes into a Soroban e
 | A real tip from the extension | [`ced71633…`](https://stellar.expert/explorer/testnet/tx/ced71633597cba185edd52f58fd017331b137c788ea44ed0d02603fcf57fd5a1): 1.50 USDC from a smart wallet, fee paid by the relayer |
 | A real claim | [`6f4d0362…`](https://stellar.expert/explorer/testnet/tx/6f4d036218e600fdc6cfd14f2e5a766e8ccd1296046ed8e58b3f7ae3c780fa09): 2.00 in escrow → 1.92 to the creator, 0.08 fee |
 | USDC | Circle testnet `USDC:GBBD…LFLA5` via its Stellar Asset Contract `CBIELTK6…DAMA` |
+| Extension | [Download 0.2.0](https://github.com/mikemoulder/tipee/releases/latest), built against the live API |
+| API | [`tipee-api.duckdns.org/health`](https://tipee-api.duckdns.org/health) |
 
 ## The problem
 
@@ -41,15 +43,20 @@ Why Stellar and not another chain: USDC is native, and five-second finality make
 - **Trusted:** the verifier key. The escrow only pays out with its signature, and the API gives it only after the code is found in the channel description. The relayer pays fees but can't move a gifter's money; `/api/relay` refuses source-account credentials and anything that names the relayer ([`checkRelayable`](packages/api/src/stellar.ts), with tests).
 - **Not built:** mainnet, Chrome Web Store listing, cash-out to local currency (a Stellar anchor would do this; it's in the pitch, not the code).
 
-## Try it
+## Try it (about two minutes)
+
+1. Download `tipee-extension-0.2.0-stellar-testnet.zip` from the [latest release](https://github.com/mikemoulder/tipee/releases/latest) and unzip it.
+2. Open `chrome://extensions`, switch on **Developer mode**, click **Load unpacked**, and pick the unzipped folder.
+3. Open the Tipee popup, set a PIN, and confirm three words of the phrase. Tipee deploys your wallet and sends 10 test USDC, which takes about 10 seconds.
+4. Open any YouTube video, click the gift beside Like, and tip. It confirms in about 5 seconds and the composer links to the transaction.
+
+To build it yourself instead:
 
 ```sh
 git clone https://github.com/mikemoulder/tipee.git && cd tipee
 npm install
-VITE_TIPEE_API=<api url> npm run build -w @tipee/extension
+VITE_TIPEE_API=https://tipee-api.duckdns.org npm run build -w @tipee/extension   # → packages/extension/dist
 ```
-
-Load `packages/extension/dist` at `chrome://extensions` (Developer mode → Load unpacked), open the extension and set a PIN. Then open any YouTube video and click the gift beside Like.
 
 Run the API yourself (needs a funded testnet relayer; see [`packages/api/README.md`](packages/api/README.md)):
 

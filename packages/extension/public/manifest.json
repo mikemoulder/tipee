@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Tipee",
-  "version": "0.1.0",
-  "description": "Tip YouTube creators in USDC on Arc testnet.",
+  "version": "0.2.0",
+  "description": "Tip YouTube creators in USDC on Stellar testnet.",
   "action": {
     "default_title": "Tipee Wallet",
     "default_popup": "index.html"
@@ -13,10 +13,16 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.youtube.com/*"],
-      "js": ["content.js"],
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
-  "permissions": ["storage"]
+  "permissions": [
+    "storage"
+  ]
 }
