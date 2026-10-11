@@ -113,14 +113,20 @@ export function stellarGateway(keys: StellarKeys): StellarGateway {
   }
 
   /**
-   * Builds, simulates, signs and submits one operation with the relayer as
-   * source, and waits for the verdict. Transactions from one relayer account
-   * are serialised: two in flight would race for the same sequence number.
+   * Builds, simulates, signs and submits one operation, and waits for the
+   * verdict. The source is the relayer unless said otherwise; a claim is
+   * submitted by the verifier itself, because the escrow's `require_auth` on
+   * the verifier is then met by the source-account signature. Transactions are
+   * serialised: two in flight from one account would race for a sequence
+   * number.
    */
   let queue: Promise<unknown> = Promise.resolve()
-  function submit(op: xdr.Operation, extraSigner?: Keypair): Promise<rpc.Api.GetSuccessfulTransactionResponse & { hash: string }> {
+  function submit(
+    op: xdr.Operation,
+    signer: Keypair = relayer,
+  ): Promise<rpc.Api.GetSuccessfulTransactionResponse & { hash: string }> {
     const run = async () => {
-      const source = await server.getAccount(relayer.publicKey())
+      const source = await server.getAccount(signer.publicKey())
       let tx = new TransactionBuilder(source, { fee: BASE_FEE, networkPassphrase: STELLAR_NETWORK_PASSPHRASE })
         .addOperation(op)
         .setTimeout(60)
@@ -130,8 +136,7 @@ export function stellarGateway(keys: StellarKeys): StellarGateway {
       } catch (error) {
         throw new TransactionFailedError(simulationMessage(error))
       }
-      tx.sign(relayer)
-      if (extraSigner) tx.sign(extraSigner)
+      tx.sign(signer)
 
       const sent = await server.sendTransaction(tx)
       if (sent.status === 'ERROR' || sent.status === 'TRY_AGAIN_LATER') {
