@@ -1,9 +1,37 @@
 # Tipee Handoff
 
 ## Status
-- Date: 2026-09-15
-- Current milestone: The website was rebuilt in a warmer expression with three self-playing product demos. Both marketing spines, `/install` and a themed 404 render and build. `/claim` is next and needs §6’s API routes.
-- Overall status: In progress
+- Date: 2026-10-11
+- Current milestone: **Porting from Arc to Stellar** on branch `stellar-port`, for the Find Your Way hackathon (General Track, deadline 2026-10-12 23:59). The port plan lives at `../port-plan.md` beside this repo.
+- Done this slice: the escrow and smart-wallet contracts are written, tested (17 Rust tests) and deployed to testnet, and the smart-wallet spike passed end to end (see *Stellar Facts*).
+- Next: `@tipee/shared` (7 decimals, Stellar config), then the API (relay, wallets, faucet, tip verification), then the extension chain layer.
+- Overall status: In progress. Everything below *Stellar Facts* describes the Arc build and is history until the port lands.
+
+## Stellar Facts (testnet, 2026-10-11)
+| What | Value |
+|---|---|
+| Network | testnet, protocol 29, `Test SDF Network ; September 2015`, RPC `https://soroban-testnet.stellar.org` |
+| USDC | Circle testnet `USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5`, SAC `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA`, 7 decimals |
+| Escrow | `CB7OEDRTDDPLG37HWY76OQQYOO56P3R3CAAWX5IUSJXIAC3IDZ7OKGUV` (fee 400 bps) |
+| Wallet wasm hash | `611b9ad888839007cdc9726151475bf79f6a7e4e780fad739c87dd6fce1ce9a2` |
+| Admin | `GC7LXNESZMEBAHT3DTBTQWXIEOLPF5QWVGWLP575MNDAL4PESXGSBVDV` (CLI identity `tipee-admin`) |
+| Verifier | `GBDL2NKQD74ZEKDSQF4F3LRVMOP3TQNBASR6ZJES7E6PNR4EYNPCDMCJ` (`tipee-verifier`) |
+| Treasury | `GCQRAKJ5P35HP7Q4ME24JSVZCOCN4IDNLUZML7BI6HVEATHDH5SI5YZP` (`tipee-treasury`, has a USDC trustline) |
+| Relayer | `GCBOETCF6JUQIVT46TOINOEESGRK536Q3DNS57BNNKDQJ24A4RAEA27L` (`tipee-relayer`). Pays every fee, deploys wallets, funds the faucet. Bought ~2,790 testnet USDC on the testnet DEX. |
+
+Secrets live only in the Stellar CLI's key store on the dev machine (`stellar keys show <name>`), never in the repo.
+
+**Spike result.** `scripts/spike-wallet.mjs` deploys a wallet for a fresh ed25519 key, funds it with 5 USDC (no trustline, no XLM), and tips 2 USDC through the escrow. The owner key signs only the auth entry, and the relayer is the transaction source and pays the fee. Each step takes about 5 s. Proof: tip tx `9ee6ea9d868ac14e3ee82562b773a59c16bbc48f0ffeb21b8ad839308d0699f6`.
+
+Things the spike settled:
+- Testnet simulation returns `sorobanCredentialsAddressV2` auth entries (CAP-71, address-bound payloads). `authorizeEntry` in `@stellar/stellar-sdk` 17.1.0 builds the right preimage for it. Older SDKs that only know `sorobanCredentialsAddress` would sign the wrong payload.
+- The wallet's `__check_auth` takes `Vec<{ public_key, signature }>`, which is exactly what `authorizeEntry(entry, keypair, …)` emits, so no custom signing code is needed.
+- SDK 17 exposes XDR fields as properties (`entry.credentials.type`), not methods.
+- Wallets are deployed with `salt = sha256(owner public key)` from the relayer, so one owner key maps to one wallet address.
+
+**Contracts** live in `contracts/` (Cargo workspace, `soroban-sdk = 28.0.0`). Build: `stellar contract build`. Test: `cargo test`.
+- `escrow`: `tip(from, channel_id, amount, note)`, `claim(channel_id, to)` (verifier only, floors the 4% fee like `fees.ts`), `balance`, `lifetime`, `config`, `set_verifier`, `set_treasury`, `upgrade`. Channel IDs are validated on chain (`UC` + 22 base64url chars). Notes are capped at 120 bytes.
+- `wallet`: owner ed25519 key can do anything; an optional session key may only call `escrow.tip` (plus the USDC transfer into the escrow it makes) under a daily cap until it expires.
 
 ## Product Context
 Tipee is a Manifest V3 browser extension for tipping YouTube creators in Arc testnet USDC. Gifter private keys stay encrypted and local to the browser. Creator funds are held in Circle developer-controlled escrow until channel ownership is verified.
