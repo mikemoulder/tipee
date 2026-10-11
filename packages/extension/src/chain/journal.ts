@@ -1,10 +1,9 @@
 /**
  * What this wallet knows about its own tips.
  *
- * A `Transfer` log says an amount moved to an address. It cannot say that the
- * address is a creator's escrow, or which creator — that mapping lives in the
- * backend, and the escrow addresses themselves are deliberately anonymous
- * on-chain. So the extension keeps its own note when it sends one, and the
+ * A USDC `transfer` event says an amount moved to the escrow. It cannot say
+ * which creator it was for — that is in the escrow's own `tip` event, keyed by
+ * a channel ID nobody can read a name from. So the extension keeps its own note when it sends one, and the
  * activity list reads "Tipped @creator" instead of "Sent 0x1f98…f984".
  *
  * It is a label, never a ledger. The chain remains the record of what happened:
@@ -23,12 +22,12 @@ const KEY = 'tipee.tips.v1'
 export const JOURNAL_LIMIT = 200
 
 export interface TipRecord {
-  txHash: `0x${string}`
+  txHash: string
   /** Normalised `@handle`, as scraped. */
   handle: string
   displayName: string
   /** The escrow that received it. */
-  recipient: `0x${string}`
+  recipient: string
   /** Accounting units as a decimal string — `chrome.storage` cannot hold a bigint. */
   amount: string
   /** Epoch milliseconds, taken when the transaction was accepted. */

@@ -1,6 +1,9 @@
+import { StrKey } from '@stellar/stellar-sdk'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { walletAddressFor } from '../chain/stellar'
 import { InvalidPinError, PinError } from './crypto'
+import { keypairFromMnemonic } from './sep5'
 
 // Every wallet operation here runs real PBKDF2 at 600k iterations, which is
 // the point — the cost is the security property, so it cannot be mocked away.
@@ -23,7 +26,7 @@ import {
 } from './keystore'
 
 const GUARD_KEY = 'tipee.pinGuard.v1'
-const WALLET_KEY = 'tipee.wallet.v1'
+const WALLET_KEY = 'tipee.wallet.v2'
 const PIN = '123456'
 const WRONG_PIN = '654321'
 
@@ -63,7 +66,11 @@ describe('wallet creation', () => {
     const wallet = await createWalletRecord(PIN)
     const unlocked = await unlockWallet(PIN)
 
-    expect(wallet.address).toMatch(/^0x[a-fA-F0-9]{40}$/)
+    // The wallet is a contract whose address follows from the owner key, and
+    // the owner key from the phrase: all three agree, offline.
+    expect(StrKey.isValidContract(wallet.address)).toBe(true)
+    expect(keypairFromMnemonic(wallet.mnemonic).publicKey()).toBe(wallet.owner)
+    expect(walletAddressFor(wallet.owner)).toBe(wallet.address)
     expect(unlocked).toBe(wallet.mnemonic)
     expect(unlocked).toMatch(/^[a-z]+(?: [a-z]+){11}$/)
     expect(await hasWallet()).toBe(true)

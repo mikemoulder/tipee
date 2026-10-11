@@ -1,11 +1,22 @@
-import { formatUsdc, isValidChannelId, type RecordTipRequest, type ResolveCreatorResponse } from '@tipee/shared'
-import { isAddress } from 'viem'
+import {
+  ESCROW_CONTRACT_ID,
+  formatUsdc,
+  isValidChannelId,
+  type RecordTipRequest,
+  type ResolveCreatorResponse,
+} from '@tipee/shared'
 
-/** Where the backend lives. Absent until someone configures one. */
+/** Where the backend lives, when someone has pointed the extension elsewhere. */
 const API_BASE_KEY = 'tipee.apiBase.v1'
 
 /**
- * Raised when the escrow wallet for a channel cannot be established.
+ * The deployed backend, baked in at build time (`VITE_TIPEE_API`), so a fresh
+ * install works without a trip to Settings. Settings can still override it.
+ */
+export const DEFAULT_API_BASE: string = (import.meta.env?.VITE_TIPEE_API as string | undefined) ?? 'http://localhost:3000'
+
+/**
+ * Raised when the creator a tip is for cannot be established.
  *
  * Every path here fails closed. The extension is not allowed to guess a
  * destination, fall back to a bundled address, or reuse the last one it saw:
@@ -20,10 +31,10 @@ export class EscrowUnavailableError extends Error {
   }
 }
 
-export async function apiBase(): Promise<string | null> {
+export async function apiBase(): Promise<string> {
   const stored = await chrome.storage.local.get(API_BASE_KEY)
   const base = stored[API_BASE_KEY]
-  return typeof base === 'string' && base !== '' ? base.replace(/\/+$/, '') : null
+  return (typeof base === 'string' && base !== '' ? base : DEFAULT_API_BASE).replace(/\/+$/, '')
 }
 
 /** Where Tipee's service lives. Settable, because it moves between local work and a deployment. */
@@ -34,23 +45,21 @@ export async function setApiBase(base: string): Promise<void> {
 /** The creator behind a handle, as the backend establishes them. */
 export interface ResolvedCreator {
   channelId: string
-  escrowAddress: `0x${string}`
+  /** Always `ESCROW_CONTRACT_ID`; checked, never taken on trust. */
+  escrowContract: string
   displayName: string
 }
 
 /**
- * Asks the backend which escrow wallet receives tips for a channel.
+ * Asks the backend which channel a handle belongs to.
  *
  * The backend resolves this, not the extension: it establishes the channel id
  * server-side by fetching the channel page, because a client-supplied id could
- * be forged to point a tip at somebody else's escrow (idea.md §8). All this
- * side does is refuse anything that does not come back as a real address.
+ * be forged to point a tip at somebody else's balance (idea.md §8). The escrow
+ * it names must be the one this extension ships with; anything else is refused.
  */
 export async function resolveCreator(handle: string): Promise<ResolvedCreator> {
   const base = await apiBase()
-  if (!base) {
-    throw new EscrowUnavailableError('Tipee is not connected to a backend yet.')
-  }
 
   let response: Response
   try {
@@ -60,7 +69,7 @@ export async function resolveCreator(handle: string): Promise<ResolvedCreator> {
   }
 
   if (!response.ok) {
-    throw new EscrowUnavailableError('Tipee could not find an escrow wallet for this channel.')
+    throw new EscrowUnavailableError('Tipee could not find this channel on YouTube.')
   }
 
   let body: unknown
@@ -71,12 +80,12 @@ export async function resolveCreator(handle: string): Promise<ResolvedCreator> {
   }
 
   const resolved = body as Partial<ResolveCreatorResponse> | null
-  const address = resolved?.wallet_address
 
-  // Shape only, not checksum: Circle returns lowercase addresses, and a
-  // checksum rule here would reject every escrow it ever created.
-  if (typeof address !== 'string' || !isAddress(address, { strict: false })) {
-    throw new EscrowUnavailableError('Tipee sent back an invalid escrow address.')
+  // One escrow for every creator, fixed in this build. A backend naming any
+  // other contract is either misconfigured or not Tipee's, and either way the
+  // tip does not go there.
+  if (resolved?.escrow_contract !== ESCROW_CONTRACT_ID) {
+    throw new EscrowUnavailableError('Tipee named an escrow this extension does not trust.')
   }
   if (!isValidChannelId(resolved?.channel_id)) {
     throw new EscrowUnavailableError('Tipee sent back an unusable creator.')
@@ -84,7 +93,7 @@ export async function resolveCreator(handle: string): Promise<ResolvedCreator> {
 
   return {
     channelId: resolved.channel_id as string,
-    escrowAddress: address as `0x${string}`,
+    escrowContract: ESCROW_CONTRACT_ID,
     displayName: typeof resolved?.display_name === 'string' ? resolved.display_name : handle,
   }
 }
@@ -92,7 +101,7 @@ export async function resolveCreator(handle: string): Promise<ResolvedCreator> {
 /**
  * Tells the backend a tip happened, once it has.
  *
- * Best effort on purpose. The transaction is already on Arc, which is the
+ * Best effort on purpose. The transaction is already on Stellar, which is the
  * record that decides what a creator is owed; this call only lets the backend
  * notice it sooner than a scan would. The backend re-reads the transaction
  * before believing any of it, so nothing here can inflate a balance — and a
@@ -100,12 +109,11 @@ export async function resolveCreator(handle: string): Promise<ResolvedCreator> {
  */
 export async function reportTip(tip: {
   channelId: string
-  gifterAddress: `0x${string}`
+  gifterAddress: string
   amount: bigint
-  txHash: `0x${string}`
+  txHash: string
 }): Promise<void> {
   const base = await apiBase()
-  if (!base) return
 
   const body: RecordTipRequest = {
     gifter_address: tip.gifterAddress,

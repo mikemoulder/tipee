@@ -3,8 +3,9 @@
 ## Status
 - Date: 2026-10-11
 - Current milestone: **Porting from Arc to Stellar** on branch `stellar-port`, for the Find Your Way hackathon (General Track, deadline 2026-10-12 23:59). The port plan lives at `../port-plan.md` beside this repo.
-- Done this slice: the escrow and smart-wallet contracts are written, tested (17 Rust tests) and deployed to testnet, and the smart-wallet spike passed end to end (see *Stellar Facts*).
-- Next: `@tipee/shared` (7 decimals, Stellar config), then the API (relay, wallets, faucet, tip verification), then the extension chain layer.
+- Done: contracts (deployed, 17 Rust tests), `@tipee/shared`, `@tipee/api` and `@tipee/extension` are all on Stellar. `npm test` passes **333 in 22 files**; `tsc --build` is clean; the extension builds.
+- Proven live on testnet: `scripts/verify-chain.mjs` (API path, ~19 s) and `scripts/e2e-extension.mjs` (the built extension in real Chrome: onboarding → wallet deployed + 10 USDC faucet in ~11 s → tip 1.50 USDC via the composer, confirmed ~8 s after signing → activity shows "Tipped @fireship"). A live claim paid 1.92 net / 0.08 fee.
+- Next: `/claim` page on the website, site copy Arc → Stellar, deploy the API somewhere public, README, demo video.
 - Overall status: In progress. Everything below *Stellar Facts* describes the Arc build and is history until the port lands.
 
 ## Stellar Facts (testnet, 2026-10-11)
@@ -23,11 +24,32 @@ Secrets live only in the Stellar CLI's key store on the dev machine (`stellar ke
 
 **Spike result.** `scripts/spike-wallet.mjs` deploys a wallet for a fresh ed25519 key, funds it with 5 USDC (no trustline, no XLM), and tips 2 USDC through the escrow. The owner key signs only the auth entry, and the relayer is the transaction source and pays the fee. Each step takes about 5 s. Proof: tip tx `9ee6ea9d868ac14e3ee82562b773a59c16bbc48f0ffeb21b8ad839308d0699f6`.
 
+**Decisions made during the port**
+- Accounting stays at **6 decimals**; only the chain layer works in Stellar's 7 (`toStroops` / `fromStroops` in `shared/src/stellar.ts`). Going up is exact, so fees, limits, DB columns and most tests did not move. Balances truncate the 7th decimal for display.
+- The gifter's key is SEP-5 (`m/44'/148'/0'`), so Tipee's 12 words restore in any Stellar wallet. Checked against SEP-5's own test vector.
+- The wallet address is computed offline from the owner key (deployer = relayer, salt = sha256(owner)), and the extension refuses a `/api/wallets` answer that differs.
+- The extension refuses any escrow other than `ESCROW_CONTRACT_ID`, whatever the API says.
+- The relayer is the source of every gifter transaction; the gifter signs only auth entries. `/api/relay` accepts `escrow.tip`, `usdc.transfer` out of a wallet, and a wallet's own session calls, and rejects source-account credentials and anything naming the relayer (tests in `api/src/stellar.test.ts`).
+- Claims are submitted *by the verifier account*: its `require_auth` is only met by a source-account signature when it is the transaction source.
+- Activity reads the USDC contract's `transfer` events in 4,000-ledger windows (≤6 of them, ~33 h). Wider windows hit the public RPC's processing limit on that busy contract.
+- The service worker is bundled as one file with `modulePreload: false`: Vite's preload helper touches `document`, which a worker does not have.
+- The API runs on the in-memory store when `DATABASE_URL` is unset. The chain is the record of every tip and balance, so a restart loses bookkeeping only. Migration `002_stellar.sql` covers Postgres.
+- Verification: `/api/creators/verify/init` issues `tipee-<16 hex>`; the creator puts it in their channel description; `/verify/confirm` finds it on `youtube.com/channel/<id>/about`; `/claim` spends it once.
+
 Things the spike settled:
 - Testnet simulation returns `sorobanCredentialsAddressV2` auth entries (CAP-71, address-bound payloads). `authorizeEntry` in `@stellar/stellar-sdk` 17.1.0 builds the right preimage for it. Older SDKs that only know `sorobanCredentialsAddress` would sign the wrong payload.
 - The wallet's `__check_auth` takes `Vec<{ public_key, signature }>`, which is exactly what `authorizeEntry(entry, keypair, …)` emits, so no custom signing code is needed.
 - SDK 17 exposes XDR fields as properties (`entry.credentials.type`), not methods.
 - Wallets are deployed with `salt = sha256(owner public key)` from the relayer, so one owner key maps to one wallet address.
+
+**Running it locally**
+```sh
+export RELAYER_SECRET=$(stellar keys show tipee-relayer) VERIFIER_SECRET=$(stellar keys show tipee-verifier)
+PORT=3477 npm start -w @tipee/api                      # port 3111 is taken on this machine
+API=http://localhost:3477 node scripts/verify-chain.mjs @fireship
+VITE_TIPEE_API=http://localhost:3477 npm run build -w @tipee/extension
+```
+Kill the API with `kill <pid>`; `pkill -f src/server.ts` also matches the shell running it.
 
 **Contracts** live in `contracts/` (Cargo workspace, `soroban-sdk = 28.0.0`). Build: `stellar contract build`. Test: `cargo test`.
 - `escrow`: `tip(from, channel_id, amount, note)`, `claim(channel_id, to)` (verifier only, floors the 4% fee like `fees.ts`), `balance`, `lifetime`, `config`, `set_verifier`, `set_treasury`, `upgrade`. Channel IDs are validated on chain (`UC` + 22 base64url chars). Notes are capped at 120 bytes.

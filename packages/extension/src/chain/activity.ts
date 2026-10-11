@@ -1,22 +1,20 @@
-import type { PublicClient } from 'viem'
+import { Address, nativeToScVal, scValToNative, type rpc } from '@stellar/stellar-sdk'
 
-import { ERC20_ABI, USDC_ADDRESS } from './arc'
-import { explorerMovements } from './explorer'
+import { USDC_CONTRACT_ID, fromStroops } from '@tipee/shared'
+
+import { stellarServer } from './stellar'
 
 /** One USDC movement in or out of the wallet. */
 export interface Movement {
-  txHash: `0x${string}`
-  /** The other side of the transfer. */
-  counterparty: `0x${string}`
+  txHash: string
+  /** The other side of the transfer: an account, a wallet, or the escrow. */
+  counterparty: string
   /** Accounting units, always positive — `outgoing` carries the direction. */
   amount: bigint
   outgoing: boolean
+  /** The ledger it closed in. */
   blockNumber: bigint
-  /**
-   * When it happened, if the source knew. The explorer reports it; a log scan
-   * would need one more RPC call per row to find out, so those rows carry only
-   * a block number and the screen estimates from it.
-   */
+  /** When that ledger closed. Stellar's RPC reports it with every event. */
   at?: Date
 }
 
@@ -29,175 +27,149 @@ export interface Movement {
  */
 export class ActivityUnavailableError extends Error {
   constructor() {
-    super('Could not read activity from Arc.')
+    super('Could not read activity from Stellar.')
     this.name = 'ActivityUnavailableError'
   }
 }
 
 /**
- * How wide one `eth_getLogs` query may be.
+ * How wide one `getEvents` query may be, in ledgers.
  *
- * Measured against Arc's public testnet RPCs: a 28,000-block range is served,
- * 30,000 comes back as "requested range too large", and all three endpoints
- * behave the same. 25,000 keeps a margin under that ceiling — a query that
- * exceeds it is refused outright, which reads on screen as a wallet with no
- * history rather than as a request that was too greedy.
- *
- * There is a second ceiling — 20,000 matching logs per query — which a single
- * wallet's own transfers will not approach, but an unfiltered query would.
+ * Measured against the public testnet RPC: the USDC contract is one of the
+ * busiest on the network, and a topic-filtered query over 100,000 ledgers is
+ * refused outright ("exceeded processing limit"), while 17,280 quietly comes
+ * back short. 5,000 ledgers (about seven hours) answered completely in a
+ * quarter of a second, so windows are kept under that.
  */
-export const ACTIVITY_CHUNK_BLOCKS = 25_000n
+export const ACTIVITY_CHUNK_LEDGERS = 4_000
 
-/**
- * How many of those windows a scan will walk before giving up.
- *
- * Each one is two queries — `from` and `to` are separate indexed topics — and
- * the public endpoints rate-limit a burst, so this is a budget rather than a
- * target: the scan stops as soon as it has enough movements to fill the list.
- */
+/** How many windows a scan walks before stopping: about a day and a half. */
 export const ACTIVITY_CHUNKS = 6
 
-/** The furthest back a scan can reach: about a day at Arc's block time. */
-export const ACTIVITY_LOOKBACK_BLOCKS = ACTIVITY_CHUNK_BLOCKS * BigInt(ACTIVITY_CHUNKS)
+/** Stellar closes a ledger about every five seconds. */
+export const LEDGER_SECONDS = 5
 
 /** What one read found, and how much history it managed to cover. */
 export interface ActivityReport {
   /** Newest first, at most `limit` of them. */
   movements: Movement[]
-  /** Which source answered — they reach back different distances. */
-  source: 'explorer' | 'chain'
-  /** The head a log scan measured back from. Absent for explorer reads. */
+  source: 'chain'
+  /** The ledger the scan measured back from. */
   head?: bigint
-  /** How many blocks a log scan covered. Absent for explorer reads. */
+  /** How many ledgers the scan covered. */
   scannedBlocks?: bigint
-  /** True when an RPC refusal cut a scan short of its own budget. */
+  /** True when an RPC refusal cut the scan short of its own budget. */
   partial: boolean
 }
+
+const TRANSFER = nativeToScVal('transfer', { type: 'symbol' }).toXDR('base64')
 
 /**
  * Recent USDC movements for one wallet, newest first.
  *
- * Read straight from `Transfer` logs. That means it reflects the chain rather
- * than anything Tipee recorded — a tip sent from this wallet by other means
- * still shows up, and a tip our backend failed to record does not disappear.
+ * Read straight from the USDC contract's `transfer` events, so it reflects the
+ * chain rather than anything Tipee recorded: a tip is the wallet's transfer
+ * into the escrow, and shows up here whether or not the backend heard of it.
  *
- * The scan walks backwards in windows the RPC will accept and stops as soon as
- * the list is full, so a busy wallet costs two queries and an empty one costs
- * the budget. A window that fails *after* the first one ends the scan and comes
- * back `partial`: what was read is still true, it just covers less chain than
+ * The scan walks backwards in windows the RPC will serve and stops once the
+ * list is full. A window that fails *after* the first ends the scan and comes
+ * back `partial`: what was read is still true, it just covers less than
  * intended, and the screen says so instead of implying the wallet is empty.
  */
-export async function recentMovements(
-  client: PublicClient,
-  owner: `0x${string}`,
-  limit = 20,
-): Promise<ActivityReport> {
-  const transfer = ERC20_ABI.find((entry) => entry.type === 'event' && entry.name === 'Transfer')
-  if (!transfer) throw new ActivityUnavailableError()
+export async function walletActivity(owner: string, limit = 20): Promise<ActivityReport> {
+  const server = stellarServer()
 
-  let head: bigint
+  let head: number
+  let oldest: number
   try {
-    head = await client.getBlockNumber()
+    const latest = await server.getLatestLedger()
+    head = latest.sequence
+    // The RPC only keeps a retention window; asking before it is an error.
+    const health = await server.getHealth()
+    oldest = health.oldestLedger
   } catch {
     throw new ActivityUnavailableError()
   }
 
+  const me = Address.fromString(owner).toScVal().toXDR('base64')
   const found = new Map<string, Movement>()
-  let toBlock = head
-  let oldest = head
+  let end = head
+  let reached = head
   let partial = false
 
-  for (let chunk = 0; chunk < ACTIVITY_CHUNKS; chunk += 1) {
-    // Inclusive of both ends, so windows tile the chain exactly: no block is
-    // asked for twice, and none falls between two of them.
-    const fromBlock = toBlock >= ACTIVITY_CHUNK_BLOCKS ? toBlock - ACTIVITY_CHUNK_BLOCKS + 1n : 0n
+  for (let chunk = 0; chunk < ACTIVITY_CHUNKS && end > oldest; chunk += 1) {
+    const start = Math.max(end - ACTIVITY_CHUNK_LEDGERS + 1, oldest)
 
-    // Two queries per window because `from` and `to` are separate indexed
-    // topics: one filter cannot express "either side is me" without matching
-    // every transfer on the chain.
-    const [sent, received] = await Promise.allSettled([
-      client.getLogs({ address: USDC_ADDRESS, event: transfer, args: { from: owner }, fromBlock, toBlock }),
-      client.getLogs({ address: USDC_ADDRESS, event: transfer, args: { to: owner }, fromBlock, toBlock }),
-    ])
-
-    if (sent.status !== 'fulfilled' || received.status !== 'fulfilled') {
-      // Half a window is not a smaller window — it is a window missing one
-      // direction, which would show sends without receipts. Never keep it.
+    // Two filters: `from` and `to` are separate topics, and one filter cannot
+    // say "either side is me" without matching every transfer on the network.
+    let events: rpc.Api.EventResponse[]
+    try {
+      const page = await server.getEvents({
+        startLedger: start,
+        endLedger: end + 1,
+        filters: [
+          { type: 'contract', contractIds: [USDC_CONTRACT_ID], topics: [[TRANSFER, me, '*', '*']] },
+          { type: 'contract', contractIds: [USDC_CONTRACT_ID], topics: [[TRANSFER, '*', me, '*']] },
+        ],
+        limit: 100,
+      })
+      events = page.events
+    } catch {
       if (chunk === 0) throw new ActivityUnavailableError()
       partial = true
       break
     }
 
-    for (const log of [...sent.value, ...received.value]) {
-      const movement = toMovement(log, owner)
-      if (movement) found.set(logKey(log), movement)
+    for (const event of events) {
+      const movement = toMovement(event, owner)
+      if (movement) found.set(`${movement.txHash}:${event.id}`, movement)
     }
 
-    oldest = fromBlock
-    if (found.size >= limit || fromBlock === 0n) break
-    toBlock = fromBlock - 1n
+    reached = start
+    end = start - 1
+    if (found.size >= limit) break
   }
 
   const movements = [...found.values()]
-    .sort((a, b) => Number(b.blockNumber - a.blockNumber))
+    .sort((a, b) => (a.blockNumber === b.blockNumber ? 0 : a.blockNumber > b.blockNumber ? -1 : 1))
     .slice(0, limit)
 
-  return { movements, source: 'chain', head, scannedBlocks: head - oldest + 1n, partial }
-}
-
-/**
- * Wallet history, from whichever source can answer.
- *
- * The explorer is asked first because it has the whole history indexed, with
- * timestamps; the log scan behind it reaches back about a day and estimates
- * ages from block distance. Preferring the explorer is a display decision and
- * nothing more — it never sees a key, and it cannot make a tip that did not
- * happen appear, because the fallback would contradict it on the next open.
- *
- * An explorer that answers with an empty list is believed. It indexes within
- * seconds of a block, and re-running the scan behind it would double the cost
- * of the common case — a new wallet — to hedge against a lag the refresh
- * button already covers.
- */
-export async function walletActivity(
-  client: PublicClient,
-  owner: `0x${string}`,
-  limit = 20,
-): Promise<ActivityReport> {
-  try {
-    const movements = await explorerMovements(owner, limit)
-    return { movements, source: 'explorer', partial: false }
-  } catch {
-    // Down, rate-limited, or answering with something unrecognisable. The
-    // chain itself is still there.
-    return recentMovements(client, owner, limit)
-  }
-}
-
-/**
- * Identifies one log. A transaction can hold several transfers, so the hash
- * alone would collapse a tip and its change into a single row.
- */
-function logKey(log: unknown): string {
-  const entry = log as { transactionHash?: string; logIndex?: number }
-  return `${entry.transactionHash ?? ''}:${entry.logIndex ?? 0}`
-}
-
-function toMovement(log: unknown, owner: `0x${string}`): Movement | null {
-  const entry = log as {
-    transactionHash?: `0x${string}`
-    blockNumber?: bigint
-    args?: { from?: `0x${string}`; to?: `0x${string}`; value?: bigint }
-  }
-  const { from, to, value } = entry.args ?? {}
-  if (!from || !to || value === undefined || !entry.transactionHash) return null
-
-  const outgoing = from.toLowerCase() === owner.toLowerCase()
   return {
-    txHash: entry.transactionHash,
+    movements,
+    source: 'chain',
+    head: BigInt(head),
+    scannedBlocks: BigInt(head - reached + 1),
+    partial,
+  }
+}
+
+/**
+ * A SAC `transfer` event as a movement. Topics are `[transfer, from, to,
+ * asset]`; the value is the amount, or a map carrying it when the recipient is
+ * muxed.
+ */
+export function toMovement(event: rpc.Api.EventResponse, owner: string): Movement | null {
+  let from: string
+  let to: string
+  let stroops: bigint
+  try {
+    from = String(scValToNative(event.topic[1]!))
+    to = String(scValToNative(event.topic[2]!))
+    const value = scValToNative(event.value) as bigint | { amount?: bigint }
+    stroops = typeof value === 'bigint' ? value : BigInt(value.amount ?? 0n)
+  } catch {
+    return null
+  }
+
+  if (stroops <= 0n || (from !== owner && to !== owner) || from === to) return null
+  const outgoing = from === owner
+
+  return {
+    txHash: event.txHash,
     counterparty: outgoing ? to : from,
-    amount: value,
+    amount: fromStroops(stroops),
     outgoing,
-    blockNumber: entry.blockNumber ?? 0n,
+    blockNumber: BigInt(event.ledger),
+    at: new Date(event.ledgerClosedAt),
   }
 }

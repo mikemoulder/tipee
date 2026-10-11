@@ -1,89 +1,56 @@
-import { ARC_MEMO_ABI, ARC_MEMO_ADDRESS, MEMO_MAX_BYTES, decodeMemoData, memoIdFromNonce } from '@tipee/shared'
-import { decodeFunctionData } from 'viem'
+import { Address, scValToNative, xdr } from '@stellar/stellar-sdk'
 import { describe, expect, it } from 'vitest'
 
-import { ERC20_ABI, USDC_ADDRESS } from './arc'
+import { ESCROW_CONTRACT_ID, MEMO_MAX_BYTES, ONE_USDC } from '@tipee/shared'
+
 import { buildTipCall } from './tip'
 
-const RECIPIENT = '0x1111111111111111111111111111111111111111' as const
-const NONCE = '3f2504e0-4f89-11d3-9a0c-0305e82c3301'
-const ONE = 1_000_000n
+const WALLET = 'CALSZXYNONPSDJD4UCZO5PE2MO66NGUEHP2SR5ZLHVLZEBR2XSGAQWZ2'
+const CHANNEL = 'UC_x5XG1OV2P6uZZ5FSM9Ttw'
 
-function readTransfer(data: `0x${string}`): { to: string; amount: bigint } {
-  const { functionName, args } = decodeFunctionData({ abi: ERC20_ABI, data })
-  if (functionName !== 'transfer') throw new Error(`expected transfer, got ${functionName}`)
-  return { to: args[0] as string, amount: args[1] as bigint }
+function decode(op: xdr.Operation) {
+  const body = xdr.Operation.fromXDR(op.toXDR('base64'), 'base64').body as unknown as {
+    invokeHostFunctionOp: { hostFunction: { invokeContract: xdr.InvokeContractArgs } }
+  }
+  const call = body.invokeHostFunctionOp.hostFunction.invokeContract
+  return {
+    contract: Address.fromScAddress(call.contractAddress).toString(),
+    fn: call.functionName.toString(),
+    args: call.args.map((arg) => scValToNative(arg as xdr.ScVal) as unknown),
+  }
 }
 
-describe('a tip with no note', () => {
-  it('is a plain USDC transfer', () => {
-    const call = buildTipCall({ recipient: RECIPIENT, amount: ONE, memo: '', nonce: NONCE })
-
-    // No memo means no reason to pay the wrapper's gas.
-    expect(call.to).toBe(USDC_ADDRESS)
-    expect(readTransfer(call.data)).toEqual({ to: RECIPIENT, amount: ONE })
-  })
-})
-
-describe('a tip carrying a note', () => {
-  const call = buildTipCall({
-    recipient: RECIPIENT,
-    amount: 5n * ONE,
-    memo: 'thank you',
-    nonce: NONCE,
+describe('a tip, as a call', () => {
+  it('calls tip on the escrow this build ships with', () => {
+    const call = decode(buildTipCall({ wallet: WALLET, channelId: CHANNEL, amount: 2n * ONE_USDC, memo: 'gm' }))
+    expect(call.contract).toBe(ESCROW_CONTRACT_ID)
+    expect(call.fn).toBe('tip')
   })
 
-  it('goes through the Memo contract', () => {
-    expect(call.to).toBe(ARC_MEMO_ADDRESS)
+  it('passes the wallet, the channel, the amount in stroops, and the note', () => {
+    const call = decode(buildTipCall({ wallet: WALLET, channelId: CHANNEL, amount: 2_500_000n, memo: 'great video' }))
+    // 2.50 USDC is 2_500_000 accounting units and 25_000_000 stroops.
+    expect(call.args).toEqual([WALLET, CHANNEL, 25_000_000n, 'great video'])
   })
 
-  it('still transfers to the creator, not to the wrapper', () => {
-    // The precompile keeps the gifter as msg.sender for the inner call; the
-    // inner call itself still has to name the creator as recipient.
-    const { args } = decodeFunctionData({ abi: ARC_MEMO_ABI, data: call.data })
-    const [target, inner] = args as [string, `0x${string}`, string, string]
-
-    expect(target).toBe(USDC_ADDRESS)
-    expect(readTransfer(inner)).toEqual({ to: RECIPIENT, amount: 5n * ONE })
+  it('carries an empty note as an empty string', () => {
+    const call = decode(buildTipCall({ wallet: WALLET, channelId: CHANNEL, amount: ONE_USDC, memo: '' }))
+    expect(call.args[3]).toBe('')
   })
 
-  it('carries the note and an id that maps back to the tip', () => {
-    const { args } = decodeFunctionData({ abi: ARC_MEMO_ABI, data: call.data })
-    const [, , memoId, memoData] = args as [string, string, string, `0x${string}`]
-
-    expect(memoId).toBe(memoIdFromNonce(NONCE))
-    expect(decodeMemoData(memoData)).toBe('thank you')
+  it('refuses a zero or negative tip', () => {
+    expect(() => buildTipCall({ wallet: WALLET, channelId: CHANNEL, amount: 0n, memo: '' })).toThrow(RangeError)
+    expect(() => buildTipCall({ wallet: WALLET, channelId: CHANNEL, amount: -1n, memo: '' })).toThrow(RangeError)
   })
 
-  it('survives a note that costs more than one byte a character', () => {
-    const memo = '🎁 謝謝 — thank you'
-    const wrapped = buildTipCall({ recipient: RECIPIENT, amount: ONE, memo, nonce: NONCE })
-    const { args } = decodeFunctionData({ abi: ARC_MEMO_ABI, data: wrapped.data })
-
-    expect(decodeMemoData(args[3] as string)).toBe(memo)
-  })
-})
-
-describe('refusals', () => {
-  it('will not build a tip for nothing', () => {
-    expect(() => buildTipCall({ recipient: RECIPIENT, amount: 0n, memo: '', nonce: NONCE })).toThrow(
-      RangeError,
-    )
-    expect(() => buildTipCall({ recipient: RECIPIENT, amount: -1n, memo: '', nonce: NONCE })).toThrow(
+  it('refuses a handle where a channel ID belongs', () => {
+    expect(() => buildTipCall({ wallet: WALLET, channelId: '@fireship', amount: ONE_USDC, memo: '' })).toThrow(
       RangeError,
     )
   })
 
-  it('will not quietly shorten an over-budget note', () => {
-    // What was typed and what gets published permanently must not differ; the
-    // caller trims with `fitMemo` where the gifter can still see the result.
-    expect(() =>
-      buildTipCall({
-        recipient: RECIPIENT,
-        amount: ONE,
-        memo: 'a'.repeat(MEMO_MAX_BYTES + 1),
-        nonce: NONCE,
-      }),
-    ).toThrow(RangeError)
+  it('refuses a memo over the byte budget rather than trimming it silently', () => {
+    const memo = '🎉'.repeat(MEMO_MAX_BYTES / 4 + 1)
+    expect(() => buildTipCall({ wallet: WALLET, channelId: CHANNEL, amount: ONE_USDC, memo })).toThrow(RangeError)
   })
 })

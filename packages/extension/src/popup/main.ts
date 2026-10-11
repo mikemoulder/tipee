@@ -1,15 +1,15 @@
-import { formatUsdc, tryParseUsdc } from '@tipee/shared'
+import { ESCROW_CONTRACT_ID, RELAYER_ADDRESS, explorerTxUrl, formatUsdc, tryParseUsdc } from '@tipee/shared'
 
 import './styles.css'
-import { ARC_LOGO, arcBadge, arcMark } from '../brand/arc-mark'
-import { ActivityUnavailableError, walletActivity, type ActivityReport, type Movement } from '../chain/activity'
+import { NETWORK_LOGO, networkBadge, networkMark } from '../brand/network-mark'
+import { ActivityUnavailableError, LEDGER_SECONDS, walletActivity, type ActivityReport, type Movement } from '../chain/activity'
 import { apiBase, setApiBase } from '../chain/creators'
 import { tipLabels, type TipRecord } from '../chain/journal'
-import { ARC_BLOCK_SECONDS, arcPublicClient, arcWalletClient, usdcBalance } from '../chain/arc'
-import { ARC_EXPLORER } from '../chain/explorer'
+import { RelayError, authorise, deployWallet, relay, requestFaucet, usdcBalance } from '../chain/stellar'
 import {
   InsufficientFundsError,
   SendUnavailableError,
+  isValidDestination,
   maxSendable,
   previewSend,
   type SendPreview,
@@ -32,8 +32,7 @@ import {
   unlockPolicy,
   type UnlockPolicy,
 } from '../wallet/session'
-import { mnemonicToAccount } from 'viem/accounts'
-import { getAddress, isAddress } from 'viem'
+import { keypairFromMnemonic } from '../wallet/sep5'
 
 const app = () => document.querySelector<HTMLElement>('#app')
 
@@ -67,20 +66,20 @@ async function boot(): Promise<void> {
 
   // Locked on a fresh browser, open for the rest of it — the owner sets which
   // in Settings.
-  if (await isUnlocked()) return renderHome(address as `0x${string}`)
-  renderLocked(address as `0x${string}`)
+  if (await isUnlocked()) return renderHome(address )
+  renderLocked(address )
 }
 
 /* Lock screen ------------------------------------------------------------ */
 
-function renderLocked(address: `0x${string}`): void {
+function renderLocked(address: string): void {
   const host = app()
   if (!host) return
 
   host.innerHTML = `
     <header class="bar">
       <span class="wordmark">tipee</span>
-      <span class="bar-actions">${arcBadge()}</span>
+      <span class="bar-actions">${networkBadge()}</span>
     </header>
     <section class="form locked">
       <div class="state">
@@ -102,7 +101,7 @@ function renderLocked(address: `0x${string}`): void {
   })
 }
 
-async function unlockWalletFromScreen(address: `0x${string}`): Promise<void> {
+async function unlockWalletFromScreen(address: string): Promise<void> {
   const pin = document.querySelector<HTMLInputElement>('#unlock-pin')?.value ?? ''
   const error = document.querySelector<HTMLElement>('#unlock-error')
   if (pin === '') {
@@ -123,7 +122,7 @@ function chrome_(): string {
     <header class="bar">
       <span class="wordmark">tipee</span>
       <span class="bar-actions">
-        ${arcBadge()}
+        ${networkBadge()}
         <button class="icon-button" id="settings" type="button" aria-label="Settings">${ICON.gear}</button>
       </span>
     </header>`
@@ -142,7 +141,7 @@ function backBar(title: string): string {
  * The wallet's home: what you hold, the two things you can do with it, and what
  * has happened lately — the structure OKX uses, in Talise's language.
  */
-function renderHome(address: `0x${string}`): void {
+function renderHome(address: string): void {
   const host = app()
   if (!host) return
 
@@ -190,7 +189,7 @@ function renderHome(address: `0x${string}`): void {
   refreshHome(address)
 }
 
-function refreshHome(address: `0x${string}`): void {
+function refreshHome(address: string): void {
   const list = document.querySelector<HTMLElement>('#activity-list')
   if (list) list.innerHTML = skeletonRows()
   void loadBalance(address)
@@ -198,7 +197,7 @@ function refreshHome(address: `0x${string}`): void {
 }
 
 /** The address is the one thing on this screen worth putting on a clipboard. */
-async function copyAddress(address: `0x${string}`): Promise<void> {
+async function copyAddress(address: string): Promise<void> {
   const label = document.querySelector<HTMLElement>('#copy-address-label')
   if (!label) return
 
@@ -211,13 +210,13 @@ async function copyAddress(address: `0x${string}`): Promise<void> {
   window.setTimeout(() => (label.textContent = shorten(address)), 1_500)
 }
 
-async function loadBalance(address: `0x${string}`): Promise<void> {
+async function loadBalance(address: string): Promise<void> {
   const value = document.querySelector<HTMLElement>('#balance')
   const note = document.querySelector<HTMLElement>('#balance-note')
   if (!value) return
 
   try {
-    const balance = await usdcBalance(arcPublicClient(), address)
+    const balance = await usdcBalance(address)
     // USDC is dollar-denominated, so the big number is shown in dollars — but
     // this is testnet, which the chip underneath never stops saying.
     value.textContent = `$${formatUsdc(balance)}`
@@ -232,20 +231,20 @@ async function loadBalance(address: `0x${string}`): Promise<void> {
     // someone off to top up money they already have.
     value.innerHTML = '$<span class="pending">—</span>'
     if (note) {
-      note.textContent = 'Arc did not answer — balance unknown.'
+      note.textContent = 'Stellar did not answer — balance unknown.'
       note.classList.add('note-warn')
     }
   }
 }
 
-async function loadActivity(address: `0x${string}`): Promise<void> {
+async function loadActivity(address: string): Promise<void> {
   const list = document.querySelector<HTMLElement>('#activity-list')
   const covered = document.querySelector<HTMLElement>('#activity-window')
   if (!list) return
 
   try {
     const [report, labels] = await Promise.all([
-      walletActivity(arcPublicClient(), address),
+      walletActivity(address),
       tipLabels(),
     ])
     if (covered) covered.textContent = coverageNote(report)
@@ -257,9 +256,9 @@ async function loadActivity(address: `0x${string}`): Promise<void> {
 
     list.innerHTML = report.movements
       .map((movement) => {
-        const tip =
-          labels.byHash.get(movement.txHash.toLowerCase()) ??
-          labels.byRecipient.get(movement.counterparty.toLowerCase())
+        // By hash only. Every tip goes to the one escrow, so the recipient says
+        // nothing about which creator a tip was for.
+        const tip = labels.byHash.get(movement.txHash.toLowerCase())
         return movementRow(movement, report.head, movement.outgoing ? tip : undefined)
       })
       .join('')
@@ -269,7 +268,7 @@ async function loadActivity(address: `0x${string}`): Promise<void> {
     if (covered) covered.textContent = ''
     list.innerHTML = emptyState(
       ICON.alert,
-      error instanceof ActivityUnavailableError ? 'Could not reach Arc' : 'Activity unavailable',
+      error instanceof ActivityUnavailableError ? 'Could not reach Stellar' : 'Activity unavailable',
       'The network did not answer. Your balance and wallet are unaffected.',
       true,
     )
@@ -299,16 +298,14 @@ function emptyState(icon: string, title: string, detail: string, retry = false):
 /**
  * How much history the list actually covers, said only when it is not all of it.
  *
- * The explorer returns the lot, so a complete list needs no caption — the list
- * is the answer. The log scan behind it reaches back about a day, less when an
- * RPC cuts it short, and that does need saying: otherwise an old tip that is
- * out of range and an old tip that never happened look the same.
+ * The scan reaches back about a day and a half, less when the RPC cuts it
+ * short, and that needs saying: otherwise an old tip that is out of range and
+ * an old tip that never happened look the same.
  */
 export function coverageNote(report: Pick<ActivityReport, 'source' | 'scannedBlocks' | 'partial'>): string {
-  if (report.source === 'explorer') return ''
   if (report.scannedBlocks === undefined) return ''
 
-  const span = duration(Number(report.scannedBlocks) * ARC_BLOCK_SECONDS)
+  const span = duration(Number(report.scannedBlocks) * LEDGER_SECONDS)
   return report.partial ? `last ~${span} · cut short` : `last ~${span}`
 }
 
@@ -324,13 +321,12 @@ export function ageOf(movement: Movement, head?: bigint, now: Date = new Date())
 }
 
 /**
- * Block distance as a rough age. Derived from Arc's average block time rather
- * than from timestamps: a timestamp per row is one more RPC call per row, on
- * endpoints that already rate-limit the two this screen makes. Everywhere it
+ * Ledger distance as a rough age, for a row without a close time. Stellar's
+ * RPC reports one with every event, so this is a fallback. Everywhere it
  * surfaces carries a `~`.
  */
 export function ageFromBlocks(blocks: bigint): string {
-  const seconds = Number(blocks) * ARC_BLOCK_SECONDS
+  const seconds = Number(blocks) * LEDGER_SECONDS
   return seconds < 90 ? 'just now' : `~${duration(seconds)} ago`
 }
 
@@ -357,6 +353,15 @@ export function movementLabel(
   if (movement.outgoing && tip) {
     return { title: `Tipped ${tip.handle}`, sub: tip.displayName || shorten(movement.counterparty) }
   }
+  if (movement.outgoing && movement.counterparty === ESCROW_CONTRACT_ID) {
+    return { title: 'Tipped a creator', sub: 'Tipee escrow' }
+  }
+  if (!movement.outgoing && movement.counterparty === ESCROW_CONTRACT_ID) {
+    return { title: 'Claimed', sub: 'Tipee escrow' }
+  }
+  if (!movement.outgoing && movement.counterparty === RELAYER_ADDRESS) {
+    return { title: 'Test USDC', sub: 'Tipee faucet' }
+  }
 
   return {
     title: movement.outgoing ? 'Sent' : 'Received',
@@ -382,7 +387,7 @@ function movementRow(movement: Movement, head?: bigint, tip?: TipRecord): string
 
 /* Deposit ---------------------------------------------------------------- */
 
-function renderDeposit(address: `0x${string}`): void {
+function renderDeposit(address: string): void {
   const host = app()
   if (!host) return
 
@@ -395,12 +400,12 @@ function renderDeposit(address: `0x${string}`): void {
 
     <section class="deposit">
       <div class="qr-frame" id="qr"></div>
-      <p class="warn">Only send <strong>USDC on Arc testnet</strong> to this address.</p>
+      <p class="warn">Only send <strong>USDC on Stellar testnet</strong> to this address. It is a contract address (C…): no trustline needed, but some exchanges cannot send to one yet.</p>
 
       <div class="asset-card">
         <div class="asset-head">
           <span class="asset-symbol">USDC</span>
-          ${arcMark()}
+          ${networkMark()}
         </div>
         <div class="asset-body">
           <p class="address" id="address">${escapeHtml(address)}</p>
@@ -409,7 +414,8 @@ function renderDeposit(address: `0x${string}`): void {
       </div>
     </section>
 
-    <div class="bracket"><button class="primary" id="faucet" type="button">Get testnet USDC</button></div>
+    <p class="error" id="faucet-note"></p>
+    <div class="bracket"><button class="primary" id="faucet" type="button">Get 10 test USDC</button></div>
   `
 
   // Generated from our own stored address, and the SVG is built by us — but it
@@ -430,28 +436,33 @@ function renderDeposit(address: `0x${string}`): void {
 
   // Replaces OKX's "Set amount", which asks the sender for a figure. On a test
   // network the useful action is not naming an amount — it is having any USDC
-  // at all, and the faucet is the only place it comes from.
-  document.querySelector('#faucet')?.addEventListener('click', () => openTab(CIRCLE_FAUCET))
+  // at all. Tipee's relayer hands out real Circle testnet USDC, once per
+  // wallet, straight to this contract address.
+  const faucet = document.querySelector<HTMLButtonElement>('#faucet')
+  faucet?.addEventListener('click', () => void takeFaucet(address, faucet))
 }
 
-/** Where testnet USDC comes from. */
-const CIRCLE_FAUCET = 'https://faucet.circle.com'
-
-function openTab(url: string): void {
-  // `chrome.tabs.create` needs no permission for this, but the popup is also
-  // rendered outside an extension context during development.
-  if (typeof chrome !== 'undefined' && chrome.tabs?.create) {
-    void chrome.tabs.create({ url })
-    return
+async function takeFaucet(address: string, button: HTMLButtonElement): Promise<void> {
+  const note = document.querySelector<HTMLElement>('#faucet-note')
+  button.disabled = true
+  button.textContent = 'Sending test USDC…'
+  try {
+    const sent = await requestFaucet(address)
+    button.textContent = `${sent.amount} USDC received`
+    if (note) note.textContent = ''
+    window.setTimeout(() => renderHome(address), 1_200)
+  } catch (error) {
+    button.disabled = false
+    button.textContent = 'Get 10 test USDC'
+    if (note) note.textContent = error instanceof RelayError ? error.message : 'The faucet did not answer. Try again.'
   }
-  window.open(url, '_blank', 'noopener')
 }
 
 async function renderQr(frame: HTMLElement, address: string): Promise<void> {
   // Loaded on demand: the encoder is only needed on this one screen, so it does
   // not sit in the popup's start-up cost.
   const { qrSvg } = await import('./qr')
-  frame.innerHTML = qrSvg(address, { logo: ARC_LOGO })
+  frame.innerHTML = qrSvg(address, { logo: NETWORK_LOGO })
 }
 
 /* Send ------------------------------------------------------------------- */
@@ -462,9 +473,9 @@ async function renderQr(frame: HTMLElement, address: string): Promise<void> {
  *
  * The middle step is the one this screen used to be missing. A single form that
  * takes an address, an amount and a PIN together asks somebody to authorise a
- * transaction whose fee, total and outcome they have not seen — and on Arc the
- * fee comes out of the same USDC being sent, so "send my balance" is always
- * short by an amount the sender was never shown.
+ * transaction whose total and outcome they have not seen. On Stellar the dry
+ * run also catches the classic dead end: a `G…` account with no USDC
+ * trustline, which would refuse the transfer.
  *
  * A tip does not go through this. It is a fixed, small amount to an escrow the
  * extension resolved rather than an address somebody typed, and the composer
@@ -476,7 +487,7 @@ interface SendDraft {
   amount: string
 }
 
-function renderWithdraw(address: `0x${string}`, draft: SendDraft = { to: '', amount: '' }): void {
+function renderWithdraw(address: string, draft: SendDraft = { to: '', amount: '' }): void {
   const host = app()
   if (!host) return
 
@@ -484,7 +495,7 @@ function renderWithdraw(address: `0x${string}`, draft: SendDraft = { to: '', amo
     ${backBar('Send')}
     <section class="form">
       <label for="to">To address</label>
-      <input id="to" type="text" autocomplete="off" spellcheck="false" placeholder="0x…" value="${escapeHtml(draft.to)}" />
+      <input id="to" type="text" autocomplete="off" spellcheck="false" placeholder="G… or C…" value="${escapeHtml(draft.to)}" />
 
       <div class="field-head">
         <label for="amount">Amount</label>
@@ -523,20 +534,17 @@ function renderWithdraw(address: `0x${string}`, draft: SendDraft = { to: '', amo
  * balance. Max fills in that figure rather than making the sender discover it
  * by having a transaction refused.
  */
-async function loadSendable(owner: `0x${string}`): Promise<void> {
+async function loadSendable(owner: string): Promise<void> {
   const available = document.querySelector<HTMLElement>('#available')
   const max = document.querySelector<HTMLButtonElement>('#max')
 
   try {
-    const client = arcPublicClient()
-    const balance = await usdcBalance(client, owner)
+    const balance = await usdcBalance(owner)
     if (available) available.textContent = `Available ${formatUsdc(balance)} USDC`
     if (balance === 0n) return
 
-    // Priced against a real transfer of this wallet's own funds, so the figure
-    // is the fee this send will actually pay.
-    const preview = await previewSend(client, { from: owner, to: owner, amount: 1n })
-    const sendable = maxSendable(balance, preview.gasCost)
+    // The relayer pays the fee, so everything held can leave.
+    const sendable = maxSendable(balance, 0n)
     if (!max || sendable === 0n) return
 
     max.disabled = false
@@ -553,29 +561,21 @@ async function loadSendable(owner: `0x${string}`): Promise<void> {
 /**
  * Address and amount, checked before anything is asked of the network.
  *
- * Addresses arrive in all three forms people are given them in: checksummed,
- * all lowercase, all uppercase. Only a *mixed*-case address carries a checksum
- * to verify, so that is the only case where a failed one is rejected — a
- * lowercase address from an explorer or an exchange is perfectly good, and
- * refusing it would look like a broken wallet. Anything accepted is normalised
- * to its checksummed form, which is what the transfer is encoded with.
+ * Stellar addresses carry a checksum in every character (StrKey), so a typo
+ * is caught here rather than discovered as money sent nowhere. Both kinds are
+ * accepted: an account (`G…`) and a contract (`C…`), such as another Tipee
+ * wallet. A `G…` account still needs a USDC trustline, which the review's
+ * dry run checks.
  */
 export function validateSendDraft(
   draft: SendDraft,
-): { ok: true; to: `0x${string}`; amount: bigint } | { ok: false; message: string } {
-  if (draft.to === '') return { ok: false, message: 'Enter the address to send to.' }
-  if (!isAddress(draft.to, { strict: false })) {
-    return { ok: false, message: 'That is not a valid Arc address.' }
+): { ok: true; to: string; amount: bigint } | { ok: false; message: string } {
+  const to = draft.to.trim()
+  if (to === '') return { ok: false, message: 'Enter the address to send to.' }
+  if (/^0x/i.test(to)) return { ok: false, message: 'That is an EVM address. Tipee sends on Stellar: G… or C….' }
+  if (!isValidDestination(to)) {
+    return { ok: false, message: 'That is not a valid Stellar address — check for a typo.' }
   }
-
-  const singleCase = draft.to === draft.to.toLowerCase() || draft.to === draft.to.toUpperCase()
-  if (!singleCase && !isAddress(draft.to)) {
-    // Mixed case is a checksum, and a checksum that does not match is a typo
-    // in an address that would otherwise look completely normal.
-    return { ok: false, message: 'That address looks mistyped — its checksum does not match.' }
-  }
-
-  const to = getAddress(draft.to.toLowerCase())
 
   const amount = tryParseUsdc(draft.amount)
   if (amount === null) return { ok: false, message: 'Enter an amount in USDC, like 5.00.' }
@@ -585,9 +585,9 @@ export function validateSendDraft(
 }
 
 function renderSendReview(
-  address: `0x${string}`,
+  address: string,
   draft: SendDraft,
-  to: `0x${string}`,
+  to: string,
   amount: bigint,
 ): void {
   const host = app()
@@ -604,7 +604,7 @@ function renderSendReview(
         <div class="movement skeleton" aria-hidden="true"></div>
         <div class="movement skeleton" aria-hidden="true"></div>
       </div>
-      <p class="sim" id="sim"><span class="sim-icon">${ICON.clock}</span>Running this transfer against Arc…</p>
+      <p class="sim" id="sim"><span class="sim-icon">${ICON.clock}</span>Running this transfer against Stellar…</p>
     </section>
     <div class="bracket"><button class="primary" id="confirm" type="button" disabled>Confirm</button></div>
   `
@@ -614,9 +614,9 @@ function renderSendReview(
 }
 
 async function loadPreview(
-  address: `0x${string}`,
+  address: string,
   draft: SendDraft,
-  to: `0x${string}`,
+  to: string,
   amount: bigint,
 ): Promise<void> {
   const summary = document.querySelector<HTMLElement>('#summary')
@@ -624,12 +624,12 @@ async function loadPreview(
   const confirm = document.querySelector<HTMLButtonElement>('#confirm')
 
   try {
-    const preview = await previewSend(arcPublicClient(), { from: address, to, amount })
+    const preview = await previewSend({ from: address, to, amount })
 
     if (summary) summary.innerHTML = summaryRows(preview)
     if (sim) {
       sim.classList.add('ok')
-      sim.innerHTML = `<span class="sim-icon">${ICON.check}</span>Checked on Arc against live state — this transfer succeeds. Re-checked when you confirm.`
+      sim.innerHTML = `<span class="sim-icon">${ICON.check}</span>Checked on Stellar against live state — this transfer succeeds. Re-checked when you confirm.`
     }
     if (confirm) {
       confirm.disabled = false
@@ -660,7 +660,7 @@ function summaryRows(preview: SendPreview): string {
       shorten(preview.to),
     )}</span></div>
     <div class="summary-row"><span>Amount</span><span>${escapeHtml(formatUsdc(preview.amount))} USDC</span></div>
-    <div class="summary-row"><span>Network fee</span><span>${escapeHtml(formatUsdc(preview.gasCost))} USDC</span></div>
+    <div class="summary-row"><span>Network fee</span><span>Paid by Tipee</span></div>
     <div class="summary-row total"><span>Total</span><span>${escapeHtml(formatUsdc(preview.total))} USDC</span></div>
     <div class="summary-row"><span>Balance after</span><span>${escapeHtml(formatUsdc(preview.balanceAfter))} USDC</span></div>`
 }
@@ -674,7 +674,7 @@ function summaryRows(preview: SendPreview): string {
  * first. Either way the total being authorised is the one already on screen.
  */
 async function confirmSend(
-  address: `0x${string}`,
+  address: string,
   draft: SendDraft,
   preview: SendPreview,
   button: HTMLButtonElement,
@@ -694,7 +694,7 @@ async function confirmSend(
  * field is part of filling in a form, and this is the last thing before money
  * moves.
  */
-function renderSendConfirm(address: `0x${string}`, draft: SendDraft, preview: SendPreview): void {
+function renderSendConfirm(address: string, draft: SendDraft, preview: SendPreview): void {
   const host = app()
   if (!host) return
 
@@ -703,9 +703,7 @@ function renderSendConfirm(address: `0x${string}`, draft: SendDraft, preview: Se
     <section class="form">
       <div class="review-head">
         <p class="review-amount">$${escapeHtml(formatUsdc(preview.amount))}</p>
-        <p class="review-sub">to ${escapeHtml(shorten(preview.to))} · fee ${escapeHtml(
-          formatUsdc(preview.gasCost),
-        )} USDC</p>
+        <p class="review-sub">to ${escapeHtml(shorten(preview.to))} · no fee to you</p>
       </div>
       <label for="pin">PIN</label>
       <input id="pin" type="password" inputmode="numeric" maxlength="32" autocomplete="off" />
@@ -724,7 +722,7 @@ function renderSendConfirm(address: `0x${string}`, draft: SendDraft, preview: Se
 }
 
 async function submitSend(
-  owner: `0x${string}`,
+  owner: string,
   draft: SendDraft,
   preview: SendPreview,
   button: HTMLButtonElement,
@@ -764,7 +762,7 @@ async function submitSend(
  * the same rule the tip path follows in the service worker.
  */
 async function performSend(
-  owner: `0x${string}`,
+  owner: string,
   preview: SendPreview,
   mnemonic: string,
   button: HTMLButtonElement,
@@ -773,16 +771,8 @@ async function performSend(
   const error = document.querySelector<HTMLElement>('#send-error')
 
   try {
-    const account = mnemonicToAccount(mnemonic)
-    const client = arcPublicClient()
-    const fresh = await previewSend(client, { from: owner, to: preview.to, amount: preview.amount })
-
-    const txHash = await arcWalletClient(account).sendTransaction({
-      account,
-      chain: undefined,
-      to: fresh.call.to,
-      data: fresh.call.data,
-    })
+    const fresh = await previewSend({ from: owner, to: preview.to, amount: preview.amount })
+    const txHash = await relay(await authorise(fresh.call, keypairFromMnemonic(mnemonic)))
 
     renderSendResult(owner, fresh, txHash)
   } catch (err) {
@@ -802,7 +792,7 @@ async function performSend(
   }
 }
 
-function renderSendResult(address: `0x${string}`, preview: SendPreview, txHash: `0x${string}`): void {
+function renderSendResult(address: string, preview: SendPreview, txHash: string): void {
   const host = app()
   if (!host) return
 
@@ -813,14 +803,14 @@ function renderSendResult(address: `0x${string}`, preview: SendPreview, txHash: 
         <span class="state-icon ok">${ICON.check}</span>
         <p class="state-title">${escapeHtml(formatUsdc(preview.amount))} USDC sent</p>
         <p class="state-detail">to ${escapeHtml(shorten(preview.to))}</p>
-        <a class="ghost" id="receipt" target="_blank" rel="noreferrer noopener"><span>View on Arc explorer</span></a>
+        <a class="ghost" id="receipt" target="_blank" rel="noreferrer noopener"><span>View on Stellar Expert</span></a>
       </div>
     </section>
     <div class="bracket"><button class="primary" id="done" type="button">Done</button></div>
   `
 
   const receipt = document.querySelector<HTMLAnchorElement>('#receipt')
-  if (receipt) receipt.href = `${ARC_EXPLORER}/tx/${encodeURIComponent(txHash)}`
+  if (receipt) receipt.href = explorerTxUrl(encodeURIComponent(txHash))
 
   document.querySelector('#back')?.addEventListener('click', () => renderHome(address))
   document.querySelector('#done')?.addEventListener('click', () => renderHome(address))
@@ -832,12 +822,14 @@ export function sendErrorMessage(error: unknown): string {
     return `${error.message} Short by ${formatUsdc(error.shortBy)} USDC.`
   }
   if (error instanceof SendUnavailableError) return error.message
+  if (error instanceof RelayError) return error.message
+  if (error instanceof Error && error.name === 'SimulationError') return error.message
   return 'The transfer could not be sent.'
 }
 
 /* Settings --------------------------------------------------------------- */
 
-function renderSettings(address: `0x${string}`): void {
+function renderSettings(address: string): void {
   const host = app()
   if (!host) return
 
@@ -916,7 +908,7 @@ async function renderPolicyChoices(): Promise<void> {
   })
 }
 
-async function revealPhrase(address: `0x${string}`): Promise<void> {
+async function revealPhrase(address: string): Promise<void> {
   const pin = document.querySelector<HTMLInputElement>('#reveal-pin')?.value ?? ''
   const error = document.querySelector<HTMLElement>('#reveal-error')
   if (pin === '') {
@@ -1012,7 +1004,7 @@ function renderPinSetup(): void {
   })
 }
 
-function renderSeedReveal(address: `0x${string}`, mnemonic: string): void {
+function renderSeedReveal(address: string, mnemonic: string): void {
   const host = app()
   if (!host) return
 
@@ -1046,7 +1038,7 @@ function renderSeedReveal(address: `0x${string}`, mnemonic: string): void {
  * day they need it. Asking here costs seconds while the words are still on
  * screen behind a back link.
  */
-function renderSeedCheck(address: `0x${string}`, mnemonic: string): void {
+function renderSeedCheck(address: string, mnemonic: string): void {
   const host = app()
   if (!host) return
 
@@ -1086,8 +1078,62 @@ function renderSeedCheck(address: `0x${string}`, mnemonic: string): void {
       return
     }
 
-    renderHome(address)
+    renderWalletSetup(address, mnemonic)
   })
+}
+
+/**
+ * The last step of onboarding: put the wallet on Stellar and give it something
+ * to tip with.
+ *
+ * The wallet's address was known from the moment the phrase was made; this is
+ * when Tipee's relayer deploys the contract at it, and the faucet sends test
+ * USDC. Neither costs the gifter anything, and neither needs XLM. Both are safe
+ * to retry, and skipping leaves a wallet that sets itself up on the next try.
+ */
+function renderWalletSetup(address: string, mnemonic: string): void {
+  const host = app()
+  if (!host) return
+
+  host.innerHTML = `
+    <header class="bar"><span class="wordmark">tipee</span><span class="bar-actions">${networkBadge()}</span></header>
+    <section class="form">
+      <div class="state">
+        <span class="state-icon">${ICON.clock}</span>
+        <p class="state-title" id="setup-title">Setting up your wallet</p>
+        <p class="state-detail" id="setup-detail">Deploying your wallet contract on Stellar. No XLM, no fees — Tipee covers them.</p>
+      </div>
+      <p class="error" id="setup-error"></p>
+      <div class="bracket"><button class="primary" id="setup-retry" type="button" hidden>Try again</button></div>
+      <button class="ghost" id="setup-skip" type="button" hidden><span>Skip for now</span></button>
+    </section>
+  `
+
+  const title = document.querySelector<HTMLElement>('#setup-title')
+  const detail = document.querySelector<HTMLElement>('#setup-detail')
+  const error = document.querySelector<HTMLElement>('#setup-error')
+  const retry = document.querySelector<HTMLButtonElement>('#setup-retry')
+  const skip = document.querySelector<HTMLButtonElement>('#setup-skip')
+  retry?.addEventListener('click', () => renderWalletSetup(address, mnemonic))
+  skip?.addEventListener('click', () => renderHome(address))
+
+  void (async () => {
+    try {
+      await deployWallet(keypairFromMnemonic(mnemonic))
+      if (title) title.textContent = 'Getting you test USDC'
+      if (detail) detail.textContent = 'Real Circle USDC on Stellar testnet, straight to your wallet.'
+      try {
+        await requestFaucet(address)
+      } catch {
+        // A wallet without faucet money still works; Deposit offers it again.
+      }
+      renderHome(address)
+    } catch (err) {
+      if (error) error.textContent = err instanceof RelayError ? err.message : 'Could not reach Stellar.'
+      if (retry) retry.hidden = false
+      if (skip) skip.hidden = false
+    }
+  })()
 }
 
 /** The phrase as words, however it was spaced. */
@@ -1147,7 +1193,7 @@ export function unlockMessage(error: unknown): string {
   return 'That PIN is not correct.'
 }
 
-/** `0x1a2b…9f0e` — enough of both ends to recognise, per idea.md §3.1.3. */
+/** `CABC…WXYZ` — enough of both ends to recognise, per idea.md §3.1.3. */
 export function shorten(address: string): string {
   return address.length <= 12 ? address : `${address.slice(0, 6)}…${address.slice(-4)}`
 }

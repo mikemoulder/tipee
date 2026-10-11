@@ -1,5 +1,8 @@
+import { generateMnemonic } from '@scure/bip39'
 import { wordlist } from '@scure/bip39/wordlists/english'
-import { generateMnemonic, mnemonicToAccount } from 'viem/accounts'
+
+import { walletAddressFor } from '../chain/stellar'
+import { keypairFromMnemonic } from './sep5'
 
 import {
   assertValidPin,
@@ -11,7 +14,13 @@ import {
 } from './crypto'
 
 export interface WalletRecord {
-  address: `0x${string}`
+  /**
+   * The wallet contract (`C…`) that holds the USDC. Derived from the owner key
+   * offline, so it is known before the contract is deployed.
+   */
+  address: string
+  /** The owner key (`G…`) the seed phrase derives, per SEP-5. Public. */
+  owner: string
   encrypted: string
   /** Opt-in during setup (idea.md §3.1.1): erase the wallet after MAX_ATTEMPTS failures. */
   wipeOnMaxAttempts: boolean
@@ -32,7 +41,12 @@ export const MAX_ATTEMPTS = 10
 /** Ceiling on the delay, so a locked-out owner is not shut out for hours. */
 export const MAX_BACKOFF_MS = 5 * 60 * 1000
 
-const STORAGE_KEY = 'tipee.wallet.v1'
+/**
+ * v2 is the Stellar wallet. A v1 record holds an Arc address that means
+ * nothing here, so it is not read: the seed phrase it was made from still
+ * restores the same words, just to a different chain.
+ */
+const STORAGE_KEY = 'tipee.wallet.v2'
 const GUARD_KEY = 'tipee.pinGuard.v1'
 
 /** Guessing throttle. Kept beside the wallet, never sent anywhere. */
@@ -85,6 +99,12 @@ export async function getWalletAddress(): Promise<string | null> {
   return record ? record.address : null
 }
 
+/** The owner key (`G…`), for deploying the wallet. Public. */
+export async function getWalletOwner(): Promise<string | null> {
+  const record = await getStoredWallet()
+  return record ? record.owner : null
+}
+
 export async function readPinGuard(): Promise<PinGuard> {
   const result = await chrome.storage.local.get(GUARD_KEY)
   const guard = result[GUARD_KEY] as Partial<PinGuard> | undefined
@@ -105,10 +125,11 @@ export async function createWalletRecord(
   assertValidPin(pin)
 
   const mnemonic = generateMnemonic(wordlist)
-  const account = mnemonicToAccount(mnemonic)
+  const owner = keypairFromMnemonic(mnemonic)
   const encrypted = await encryptSecret(mnemonic, pin)
   const record: WalletRecord = {
-    address: account.address,
+    address: walletAddressFor(owner),
+    owner: owner.publicKey(),
     encrypted: JSON.stringify(encrypted),
     wipeOnMaxAttempts: options.wipeOnMaxAttempts ?? false,
   }
@@ -188,10 +209,13 @@ async function getStoredWallet(): Promise<WalletRecord | null> {
   if (!wallet || typeof wallet !== 'object') return null
 
   const maybe = wallet as Partial<WalletRecord>
-  if (typeof maybe.address !== 'string' || typeof maybe.encrypted !== 'string') return null
+  if (typeof maybe.address !== 'string' || typeof maybe.owner !== 'string' || typeof maybe.encrypted !== 'string') {
+    return null
+  }
 
   return {
-    address: maybe.address as `0x${string}`,
+    address: maybe.address,
+    owner: maybe.owner,
     encrypted: maybe.encrypted,
     wipeOnMaxAttempts: maybe.wipeOnMaxAttempts === true,
   }

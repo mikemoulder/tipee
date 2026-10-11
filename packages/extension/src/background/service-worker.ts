@@ -7,13 +7,13 @@ import {
   type ScrapedCreator,
   type SendTipOutcome,
 } from '@tipee/shared'
-import { mnemonicToAccount } from 'viem/accounts'
 
-import { arcPublicClient, arcWalletClient, usdcBalance } from '../chain/arc'
 import { EscrowUnavailableError, reportTip, resolveCreator } from '../chain/creators'
 import { recordTip } from '../chain/journal'
+import { NetworkUnavailableError, RelayError, SimulationError, authorise, relay, usdcBalance } from '../chain/stellar'
 import { buildTipCall } from '../chain/tip'
 import { WalletLockedError, WalletWipedError, getWalletAddress } from '../wallet/keystore'
+import { keypairFromMnemonic } from '../wallet/sep5'
 import { isUnlocked, sessionMnemonic, unlock } from '../wallet/session'
 
 let composerWindowId: number | undefined
@@ -79,16 +79,17 @@ async function openComposer(): Promise<void> {
 /**
  * What this tip would cost, read without unlocking anything.
  *
- * Estimation needs a sender but not a signature, and the wallet address is
- * stored in the clear — so the composer can show real numbers before the gifter
- * has typed a PIN. Every field is independently nullable: a balance that could
- * not be read should not also cost the gifter the escrow address.
+ * Reading needs no signature, and the wallet address is stored in the clear —
+ * so the composer can show real numbers before the gifter has typed a PIN.
+ * The fee is always zero to the gifter: Tipee's relayer pays it. Every field is
+ * independently nullable: a balance that could not be read should not also
+ * cost the gifter the creator.
  */
-async function composerContext(amount: string, memo: string): Promise<ComposerContext> {
+async function composerContext(_amount: string, _memo: string): Promise<ComposerContext> {
   const context: ComposerContext = {
     walletAddress: null,
     balance: null,
-    gasCost: null,
+    gasCost: formatUsdc(0n),
     recipient: null,
     problem: null,
     needsPin: !(await isUnlocked()),
@@ -102,55 +103,19 @@ async function composerContext(amount: string, memo: string): Promise<ComposerCo
 
   if (pendingCreator) {
     try {
-      context.recipient = (await resolveCreator(pendingCreator.handle)).escrowAddress
+      context.recipient = (await resolveCreator(pendingCreator.handle)).escrowContract
     } catch (error) {
       context.problem = error instanceof EscrowUnavailableError ? error.message : 'Could not find this creator.'
     }
   }
 
-  const client = arcPublicClient()
   try {
-    context.balance = formatUsdc(await usdcBalance(client, context.walletAddress as `0x${string}`))
+    context.balance = formatUsdc(await usdcBalance(context.walletAddress))
   } catch {
-    context.problem ??= 'Could not read your balance from Arc.'
-  }
-
-  const parsed = tryParseUsdc(amount) ?? MIN_TIP
-  if (context.recipient) {
-    try {
-      // Estimated against the call that will actually be sent — a memo turns a
-      // bare transfer into a wrapped one, and the difference is real gas.
-      const call = buildTipCall({
-        recipient: context.recipient as `0x${string}`,
-        amount: parsed,
-        memo,
-        nonce: crypto.randomUUID(),
-      })
-      const gas = await client.estimateGas({
-        account: context.walletAddress as `0x${string}`,
-        to: call.to,
-        data: call.data,
-      })
-      const fees = await client.estimateFeesPerGas()
-      const price = fees.maxFeePerGas ?? (await client.getGasPrice())
-      context.gasCost = formatUsdc(nativeToAccounting(gas * price))
-    } catch {
-      context.problem ??= 'Could not estimate the network fee.'
-    }
+    context.problem ??= 'Could not read your balance from Stellar.'
   }
 
   return context
-}
-
-/**
- * Gas is priced in the 18-decimal native view; everything the user sees is the
- * 6-decimal ERC-20 view of the same money. Scaling down truncates, so this
- * rounds *up* — a fee shown a hundredth of a cent low is a fee that can leave a
- * balance check passing on a transaction that cannot pay for itself.
- */
-function nativeToAccounting(wei: bigint): bigint {
-  const scale = 10n ** 12n
-  return (wei + scale - 1n) / scale
 }
 
 async function sendTip(message: Extract<ExtensionMessage, { type: 'SEND_TIP' }>): Promise<SendTipOutcome> {
@@ -182,46 +147,44 @@ async function sendTip(message: Extract<ExtensionMessage, { type: 'SEND_TIP' }>)
   }
 
   try {
-    const account = mnemonicToAccount(mnemonic)
-    const recipient = creator.escrowAddress
-    const call = buildTipCall({ recipient, amount, memo: message.memo, nonce: message.nonce })
+    const owner = keypairFromMnemonic(mnemonic)
+    const wallet = await getWalletAddress()
+    if (!wallet) return { ok: false, message: 'Set up your Tipee wallet before sending a tip.' }
 
-    // Re-checked here rather than trusted from the composer: the estimate there
-    // was taken before the PIN was typed, and the balance can have moved since.
-    const client = arcPublicClient()
-    const balance = await usdcBalance(client, account.address)
-    const gas = await client.estimateGas({ account: account.address, to: call.to, data: call.data })
-    const fees = await client.estimateFeesPerGas()
-    const price = fees.maxFeePerGas ?? (await client.getGasPrice())
-    if (amount + nativeToAccounting(gas * price) > balance) {
-      return { ok: false, message: 'Not enough USDC left to cover the tip and its network fee.' }
+    // Re-checked here rather than trusted from the composer: the balance there
+    // was read before the PIN was typed, and it can have moved since.
+    const balance = await usdcBalance(wallet)
+    if (amount > balance) {
+      return { ok: false, message: 'Not enough USDC in your wallet for this tip.' }
     }
 
-    const txHash = await arcWalletClient(account).sendTransaction({
-      account,
-      chain: undefined,
-      to: call.to,
-      data: call.data,
-    })
+    // Simulate, sign only the wallet's authorisation, and let the relayer
+    // submit. The simulation is also the last check: a tip the chain would
+    // refuse fails here, with a reason, before anything is signed.
+    const call = buildTipCall({ wallet, channelId: creator.channelId, amount, memo: message.memo })
+    const txHash = await relay(await authorise(call, owner))
 
     // Who this paid, so the wallet can say "Tipped @creator" later. The chain
-    // knows the transfer; only this side knows whose escrow that address is.
+    // records the channel ID; only this side knows the handle it was sent from.
     await recordTip({
       txHash,
       handle: pendingCreator.handle,
       displayName: pendingCreator.displayName,
-      recipient,
+      recipient: creator.escrowContract,
       amount: amount.toString(),
       at: Date.now(),
     })
 
     // And tell the backend, without making the gifter wait for it or see it
-    // fail — the tip is already on Arc either way.
-    void reportTip({ channelId: creator.channelId, gifterAddress: account.address, amount, txHash })
+    // fail — the tip is already on Stellar either way.
+    void reportTip({ channelId: creator.channelId, gifterAddress: wallet, amount, txHash })
 
     return { ok: true, txHash }
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'The tip could not be sent.' }
+    if (error instanceof SimulationError || error instanceof RelayError || error instanceof NetworkUnavailableError) {
+      return { ok: false, message: error.message }
+    }
+    return { ok: false, message: 'The tip could not be sent.' }
   }
 }
 

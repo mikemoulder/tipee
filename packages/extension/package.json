@@ -10,9 +10,11 @@
     "typecheck": "tsc --build"
   },
   "dependencies": {
+    "@noble/hashes": "1.8.0",
+    "@scure/bip39": "1.6.0",
+    "@stellar/stellar-sdk": "17.1.0",
     "@tipee/shared": "*",
-    "qrcode-generator": "^2.0.4",
-    "viem": "^2.21.0"
+    "qrcode-generator": "^2.0.4"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.287",

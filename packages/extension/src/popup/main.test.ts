@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
 import { beforeAll, describe, expect, it } from 'vitest'
 
+import { ESCROW_CONTRACT_ID, RELAYER_ADDRESS } from '@tipee/shared'
+
 import type { Movement } from '../chain/activity'
 import { InsufficientFundsError, SendUnavailableError } from '../chain/simulate'
 import { WalletLockedError, WalletWipedError } from '../wallet/keystore'
@@ -8,11 +10,11 @@ import { WalletLockedError, WalletWipedError } from '../wallet/keystore'
 let shorten: (address: string) => string
 let unlockMessage: (error: unknown) => string
 let pickCheckIndexes: (total: number, count?: number, random?: () => number) => number[]
-let coverageNote: (report: { source: 'explorer' | 'chain'; scannedBlocks?: bigint; partial: boolean }) => string
+let coverageNote: (report: { source: 'chain'; scannedBlocks?: bigint; partial: boolean }) => string
 let ageFromBlocks: (blocks: bigint) => string
 let ageOf: (movement: Movement, head?: bigint, now?: Date) => string
 let validateSendDraft: (draft: { to: string; amount: string }) =>
-  | { ok: true; to: `0x${string}`; amount: bigint }
+  | { ok: true; to: string; amount: bigint }
   | { ok: false; message: string }
 let sendErrorMessage: (error: unknown) => string
 let movementLabel: (
@@ -46,11 +48,11 @@ beforeAll(async () => {
 
 describe('shortened addresses', () => {
   it('keeps both ends, which is what makes one recognisable', () => {
-    expect(shorten('0x742d35cc6634c0532925a3b844bc454e4438f44e')).toBe('0x742d…f44e')
+    expect(shorten('GCQRAKJ5P35HP7Q4ME24JSVZCOCN4IDNLUZML7BI6HVEATHDH5SI5YZP')).toBe('GCQRAK…5YZP')
   })
 
   it('leaves anything already short alone', () => {
-    expect(shorten('0xabc')).toBe('0xabc')
+    expect(shorten('GABC')).toBe('GABC')
   })
 })
 
@@ -139,43 +141,40 @@ describe('backup check answers', () => {
 })
 
 describe('how far back the list looks', () => {
-  it('says nothing when the explorer answered with everything', () => {
-    // A complete list needs no caption; the list is the answer.
-    expect(coverageNote({ source: 'explorer', partial: false })).toBe('')
+  it('says nothing when it does not know the window', () => {
+    expect(coverageNote({ source: 'chain', partial: false })).toBe('')
   })
 
-  // Arc runs at about 0.52s a block, so 150,000 blocks is a bit under a day.
-  it('states a log scan window in hours a person can hold', () => {
-    expect(coverageNote({ source: 'chain', scannedBlocks: 150_000n, partial: false })).toBe('last ~22h')
+  // Stellar closes a ledger about every 5s, so 24,000 ledgers is ~33h.
+  it('states the scan window in hours a person can hold', () => {
+    expect(coverageNote({ source: 'chain', scannedBlocks: 24_000n, partial: false })).toBe('last ~33h')
   })
 
   it('says when an RPC cut the scan short of that', () => {
     // Otherwise a shortened window and a quiet wallet look the same, and an
     // older tip that is simply out of range reads as one that never happened.
-    expect(coverageNote({ source: 'chain', scannedBlocks: 25_000n, partial: true })).toBe(
-      'last ~4h · cut short',
-    )
+    expect(coverageNote({ source: 'chain', scannedBlocks: 4_000n, partial: true })).toBe('last ~6h · cut short')
   })
 
-  it('reads block distance as an approximate age', () => {
+  it('reads ledger distance as an approximate age', () => {
     expect(ageFromBlocks(0n)).toBe('just now')
-    expect(ageFromBlocks(100n)).toBe('just now')
-    expect(ageFromBlocks(1_200n)).toBe('~10m ago')
-    expect(ageFromBlocks(25_000n)).toBe('~4h ago')
-    expect(ageFromBlocks(700_000n)).toBe('~4d ago')
+    expect(ageFromBlocks(10n)).toBe('just now')
+    expect(ageFromBlocks(120n)).toBe('~10m ago')
+    expect(ageFromBlocks(4_000n)).toBe('~6h ago')
+    expect(ageFromBlocks(70_000n)).toBe('~4d ago')
   })
 
   it('never rounds a real movement down to nothing', () => {
-    // 200 blocks is under two minutes; '0m ago' would read as broken.
-    expect(ageFromBlocks(200n)).toBe('~2m ago')
+    // 20 ledgers is under two minutes; '0m ago' would read as broken.
+    expect(ageFromBlocks(20n)).toBe('~2m ago')
   })
 })
 
 describe('the age on a row', () => {
   const now = new Date('2026-09-04T12:00:00Z')
   const row = (blockNumber: bigint, at?: Date): Movement => ({
-    txHash: `0x${'ab'.repeat(32)}`,
-    counterparty: '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984',
+    txHash: 'ab'.repeat(32),
+    counterparty: 'GCQRAKJ5P35HP7Q4ME24JSVZCOCN4IDNLUZML7BI6HVEATHDH5SI5YZP',
     amount: 1_000_000n,
     outgoing: false,
     blockNumber,
@@ -188,7 +187,7 @@ describe('the age on a row', () => {
 
   it('estimates from block distance when it did not, and marks it as an estimate', () => {
     // The `~` is the difference between a measurement and an average.
-    expect(ageOf(row(100n), 25_100n, now)).toBe('~4h ago')
+    expect(ageOf(row(100n), 4_100n, now)).toBe('~6h ago')
   })
 
   it('says nothing rather than guessing with no head and no timestamp', () => {
@@ -197,10 +196,10 @@ describe('the age on a row', () => {
 })
 
 describe('what a row says it is', () => {
-  const THEM = '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984' as const
-  const row = (outgoing: boolean): Movement => ({
-    txHash: `0x${'ab'.repeat(32)}`,
-    counterparty: THEM,
+  const THEM = 'GCQRAKJ5P35HP7Q4ME24JSVZCOCN4IDNLUZML7BI6HVEATHDH5SI5YZP'
+  const row = (outgoing: boolean, counterparty: string = THEM): Movement => ({
+    txHash: 'ab'.repeat(32),
+    counterparty,
     amount: 2_500_000n,
     outgoing,
     blockNumber: 10n,
@@ -214,48 +213,65 @@ describe('what a row says it is', () => {
   })
 
   it('falls back to the address when a note has no display name', () => {
-    expect(movementLabel(row(true), { handle: '@x', displayName: '' }).sub).toBe('0x1f98…f984')
+    expect(movementLabel(row(true), { handle: '@x', displayName: '' }).sub).toBe('GCQRAK…5YZP')
   })
 
   it('stays an honest unnamed row when there is no note', () => {
     // An escrow address says nothing about whose it is, and guessing at one
     // from the address alone would put a creator's name on a stranger's tip.
-    expect(movementLabel(row(true))).toEqual({ title: 'Sent', sub: '0x1f98…f984' })
-    expect(movementLabel(row(false))).toEqual({ title: 'Received', sub: '0x1f98…f984' })
+    expect(movementLabel(row(true))).toEqual({ title: 'Sent', sub: 'GCQRAK…5YZP' })
+    expect(movementLabel(row(false))).toEqual({ title: 'Received', sub: 'GCQRAK…5YZP' })
+  })
+
+  it('reads an unnoted transfer into the escrow as a tip, without guessing whose', () => {
+    expect(movementLabel(row(true, ESCROW_CONTRACT_ID))).toEqual({ title: 'Tipped a creator', sub: 'Tipee escrow' })
+  })
+
+  it('names faucet money as test USDC rather than a bare relayer address', () => {
+    expect(movementLabel(row(false, RELAYER_ADDRESS))).toEqual({ title: 'Test USDC', sub: 'Tipee faucet' })
   })
 })
 
 describe('checking a send before the network is asked', () => {
-  it('accepts an address and an amount', () => {
-    const checked = validateSendDraft({ to: '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984', amount: '2.50' })
-    expect(checked).toMatchObject({ ok: true, amount: 2_500_000n })
+  it('accepts an account and an amount', () => {
+    const checked = validateSendDraft({ to: 'GCQRAKJ5P35HP7Q4ME24JSVZCOCN4IDNLUZML7BI6HVEATHDH5SI5YZP', amount: '2.50' })
+    expect(checked).toMatchObject({ ok: true, to: 'GCQRAKJ5P35HP7Q4ME24JSVZCOCN4IDNLUZML7BI6HVEATHDH5SI5YZP', amount: 2_500_000n })
   })
 
-  it('takes a lowercase address, which is how explorers hand them out', () => {
-    // viem's default check is checksum-strict, so this used to read as invalid.
-    const checked = validateSendDraft({ to: '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984', amount: '1' })
-    expect(checked).toMatchObject({ ok: true, to: '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984' })
+  it('accepts a contract address, such as another Tipee wallet', () => {
+    expect(validateSendDraft({ to: 'CALSZXYNONPSDJD4UCZO5PE2MO66NGUEHP2SR5ZLHVLZEBR2XSGAQWZ2', amount: '1' })).toMatchObject({ ok: true })
   })
 
-  it('rejects a mixed-case address whose checksum does not match', () => {
-    // Mixed case is a checksum; a broken one is a typo in something that
-    // otherwise looks like a perfectly ordinary address.
-    expect(validateSendDraft({ to: '0x1f9840A85d5aF5bf1D1762F925BDADdC4201F984', amount: '1' })).toMatchObject({
+  it('trims a pasted address', () => {
+    expect(validateSendDraft({ to: `  GCQRAKJ5P35HP7Q4ME24JSVZCOCN4IDNLUZML7BI6HVEATHDH5SI5YZP\n`, amount: '1' })).toMatchObject({ ok: true, to: 'GCQRAKJ5P35HP7Q4ME24JSVZCOCN4IDNLUZML7BI6HVEATHDH5SI5YZP' })
+  })
+
+  it('rejects an address whose checksum does not match', () => {
+    // One changed character: StrKey's checksum catches it.
+    const typo = 'GCQRAKJ5P35HP7Q4ME24JSVZCOCN4IDNLUZML7BI6HVEATHDH5SI5YZQ'
+    expect(validateSendDraft({ to: typo, amount: '1' })).toMatchObject({
       ok: false,
-      message: 'That address looks mistyped — its checksum does not match.',
+      message: 'That is not a valid Stellar address — check for a typo.',
     })
   })
 
-  it('refuses anything that is not an address, before a fee is estimated for it', () => {
-    expect(validateSendDraft({ to: '', amount: '1' })).toMatchObject({ ok: false })
-    expect(validateSendDraft({ to: 'romeo.eth', amount: '1' })).toMatchObject({
+  it('says what an EVM address is, rather than just refusing it', () => {
+    expect(validateSendDraft({ to: '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984', amount: '1' })).toMatchObject({
       ok: false,
-      message: 'That is not a valid Arc address.',
+      message: 'That is an EVM address. Tipee sends on Stellar: G… or C….',
+    })
+  })
+
+  it('refuses anything that is not an address, and a secret key above all', () => {
+    expect(validateSendDraft({ to: '', amount: '1' })).toMatchObject({ ok: false })
+    expect(validateSendDraft({ to: 'romeo*stellar.org', amount: '1' })).toMatchObject({ ok: false })
+    expect(validateSendDraft({ to: 'SBGWSG6BTNCKCOB3DIFBGCVMUPQFYPA2G4O34RMTB343OYPXU5DJDVMN', amount: '1' })).toMatchObject({
+      ok: false,
     })
   })
 
   it('refuses an amount that is not one', () => {
-    const to = '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984'
+    const to = 'GCQRAKJ5P35HP7Q4ME24JSVZCOCN4IDNLUZML7BI6HVEATHDH5SI5YZP'
     expect(validateSendDraft({ to, amount: '' })).toMatchObject({ ok: false })
     expect(validateSendDraft({ to, amount: 'lots' })).toMatchObject({ ok: false })
     expect(validateSendDraft({ to, amount: '0' })).toMatchObject({
@@ -267,16 +283,14 @@ describe('checking a send before the network is asked', () => {
 
 describe('why a send did not go', () => {
   it('says how far short the balance was', () => {
-    // On Arc the fee is USDC too, so this is almost always somebody sending
-    // their whole balance and missing by exactly the fee.
     expect(sendErrorMessage(new InsufficientFundsError(1_950n, 'Not enough USDC.'))).toBe(
       'Not enough USDC. Short by 0.00195 USDC.',
     )
   })
 
   it('passes through what the chain check found', () => {
-    expect(sendErrorMessage(new SendUnavailableError('Arc rejected this transfer.'))).toBe(
-      'Arc rejected this transfer.',
+    expect(sendErrorMessage(new SendUnavailableError('That account cannot receive USDC yet.'))).toBe(
+      'That account cannot receive USDC yet.',
     )
   })
 

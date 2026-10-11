@@ -1,4 +1,5 @@
 import {
+  explorerTxUrl,
   MEMO_MAX_BYTES,
   MIN_TIP,
   TIP_PRESETS,
@@ -25,7 +26,6 @@ import './styles.css'
 let context: ComposerContext | null = null
 
 /** Where a confirmed tip can be looked at. */
-const ARC_EXPLORER = 'https://testnet.arcscan.app/tx/'
 
 export function render(creator: ScrapedCreator | null): void {
   // Looked up per call rather than held from module scope: a reference captured
@@ -310,12 +310,12 @@ function showOutcome(outcome: SendTipOutcome, amount: string, memo: string): voi
   if (outcome.ok) {
     footer.innerHTML = `
       <p class="signing-summary sent">Sent ${escapeHtml(amount)} USDC</p>
-      <a class="link" id="receipt" target="_blank" rel="noreferrer noopener">View on Arc explorer</a>
+      <a class="link" id="receipt" target="_blank" rel="noreferrer noopener">View on Stellar Expert</a>
       <div class="bracket"><button class="primary" id="done" type="button">Close</button></div>
     `
     // Set as a property, so a hash from outside this window is never markup.
     const receipt = document.querySelector<HTMLAnchorElement>('#receipt')
-    if (receipt) receipt.href = `${ARC_EXPLORER}${encodeURIComponent(outcome.txHash)}`
+    if (receipt) receipt.href = explorerTxUrl(encodeURIComponent(outcome.txHash))
     document.querySelector<HTMLButtonElement>('#done')?.addEventListener('click', () => window.close())
     return
   }
@@ -379,10 +379,8 @@ function wireMemo(onPresenceChange: () => void): () => string {
  * amount for a reason we cannot establish is worse than letting the signing
  * step refuse it, and the worker re-checks both before it broadcasts.
  *
- * Gas matters here in a way it does not on most chains. Arc pays fees in USDC,
- * the same balance the tip comes from, so a wallet holding exactly the tip
- * cannot send it (idea.md §3.1.5) — and the estimate the worker returns is of
- * the memo-wrapped call, which costs more than a bare transfer would.
+ * The fee is zero to the gifter on Stellar — Tipee's relayer pays it — but it
+ * stays part of the check, so the composer cannot drift from `validateTip`.
  */
 export function amountProblem(
   amount: bigint | null,

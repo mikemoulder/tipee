@@ -140,12 +140,12 @@ describe('how a tip ends', () => {
   it('links a confirmed tip to the explorer', async () => {
     render(CREATOR)
     sendMessage.mockClear()
-    sendMessage.mockResolvedValue({ ok: true, txHash: '0xabc123' })
+    sendMessage.mockResolvedValue({ ok: true, txHash: 'abc123' })
     sendWithPin('2')
     await settle()
 
     const receipt = document.querySelector<HTMLAnchorElement>('#receipt')
-    expect(receipt?.getAttribute('href')).toBe('https://testnet.arcscan.app/tx/0xabc123')
+    expect(receipt?.getAttribute('href')).toBe('https://stellar.expert/explorer/testnet/tx/abc123')
     expect(document.querySelector('.signing-summary')?.textContent).toContain('Sent 2.00 USDC')
   })
 
