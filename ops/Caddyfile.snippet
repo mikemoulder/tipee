@@ -1,0 +1,6 @@
+# Tipee API — Stellar testnet relayer, channel resolution and claims, on
+# 127.0.0.1:3477. The Vercel site and the extension call it over HTTPS.
+tipee-api.duckdns.org {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:3477
+}

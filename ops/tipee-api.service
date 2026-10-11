@@ -1,0 +1,19 @@
+# Tipee API as a system service. Install (as root):
+#   cp ops/tipee-api.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now tipee-api
+# Secrets live in the EnvironmentFile, readable only by its owner; never in the repo.
+[Unit]
+Description=Tipee API (Stellar testnet relayer, resolution, claims)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=coder
+WorkingDirectory=/home/coder/Stellar/tipee
+EnvironmentFile=/home/coder/.config/tipee/api.env
+ExecStart=/usr/bin/node --experimental-strip-types packages/api/src/server.ts
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

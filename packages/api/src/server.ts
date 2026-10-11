@@ -43,7 +43,7 @@ async function main(): Promise<void> {
   if (!config.databaseUrl) app.log.warn('DATABASE_URL is not set — using the in-memory store.')
   if (!config.verifierSecret) app.log.warn('VERIFIER_SECRET is not set — creator claims will be refused.')
 
-  await app.listen({ port: config.port, host: '0.0.0.0' })
+  await app.listen({ port: config.port, host: config.host })
 }
 
 main().catch((error) => {

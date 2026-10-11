@@ -60,6 +60,7 @@ bookkeeping, not money. With one, migrations run at boot (Postgres 13+).
 | `STELLAR_RPC_URL` | no | Defaults to `https://soroban-testnet.stellar.org`. |
 | `FAUCET_AMOUNT` | no | USDC per faucet request. Defaults to `10`. |
 | `PORT` | no | Defaults to 3000. |
+| `HOST` | no | Defaults to `0.0.0.0`. Use `127.0.0.1` behind a reverse proxy. |
 
 ## Status codes
 

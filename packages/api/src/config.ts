@@ -10,6 +10,8 @@ import { STELLAR_RPC_URL } from '@tipee/shared'
 
 export interface Config {
   port: number
+  /** `127.0.0.1` behind a reverse proxy; `0.0.0.0` (the default) to listen everywhere. */
+  host: string
   /** Null runs the in-memory store: fine for a demo, since the chain is the record. */
   databaseUrl: string | null
   rpcUrl: string
@@ -41,6 +43,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 
   return {
     port,
+    host: env.HOST?.trim() || '0.0.0.0',
     databaseUrl: env.DATABASE_URL?.trim() || null,
     rpcUrl: env.STELLAR_RPC_URL?.trim() || STELLAR_RPC_URL,
     relayerSecret,

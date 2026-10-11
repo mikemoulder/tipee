@@ -42,6 +42,11 @@ Things the spike settled:
 - SDK 17 exposes XDR fields as properties (`entry.credentials.type`), not methods.
 - Wallets are deployed with `salt = sha256(owner public key)` from the relayer, so one owner key maps to one wallet address.
 
+**Deployed on this VPS** (2026-10-11)
+- `ops/run-api.sh` runs the API in a restart loop on `127.0.0.1:3477`, secrets from `~/.config/tipee/api.env` (mode 600, outside the repo). Logs: `~/logs/tipee/api.log`. Started with `setsid nohup ops/run-api.sh &`; it survives crashes, not reboots.
+- For reboots and HTTPS, the owner installs `ops/tipee-api.service` (systemd) and appends `ops/Caddyfile.snippet` to `/etc/caddy/Caddyfile` (needs root). The VPS's Caddy also fronts the owner's other services, so it is never edited from here, and its admin API is not used (changes there do not persist).
+- Public hostname: a duckdns name pointing at `173.212.238.167` (proposed `tipee-api.duckdns.org`).
+
 **Running it locally**
 ```sh
 export RELAYER_SECRET=$(stellar keys show tipee-relayer) VERIFIER_SECRET=$(stellar keys show tipee-verifier)
