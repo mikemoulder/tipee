@@ -48,7 +48,10 @@ export function Wordmark({
   return (
     <span className={`inline-flex items-center gap-2 ${className}`}>
       <GiftMark size={markSize} />
-      <span className="font-sans font-extrabold tracking-[-0.045em]">tipee</span>
+      {/* Anton, and no weight class. The face has one weight and it is already
+          black; `font-extrabold` here would ask the browser to synthesise a
+          bold on top of it, which smears the stems at nav size. */}
+      <span className="font-display tracking-[-0.01em] lowercase">tipee</span>
     </span>
   )
 }
@@ -69,10 +72,32 @@ export function Container({
   return <div className={`mx-auto w-full ${max} px-5 sm:px-8 ${className}`}>{children}</div>
 }
 
-export function Eyebrow({ children, className = '' }: { children: ReactNode; className?: string }) {
+/**
+ * `tone` is a prop and not something you pass through `className`, because the
+ * two candidates are both `color` utilities: Tailwind settles that conflict by
+ * stylesheet order rather than by the order the classes are written, so a
+ * `text-muted` passed in from outside may silently lose to the `text-faint`
+ * baked in here. The same trap is documented on the nav's Add-to-Chrome button.
+ *
+ * `muted` exists for the hero, where the eyebrow sits over the frosted clip
+ * rather than plain white. Measured against the darkest frame of that clip,
+ * `faint` lands at 3.43:1 and `muted` at 4.87:1 — and at 11.5px this is small
+ * text, so 4.5:1 is the bar it has to clear.
+ */
+export function Eyebrow({
+  children,
+  className = '',
+  tone = 'faint',
+}: {
+  children: ReactNode
+  className?: string
+  tone?: 'faint' | 'muted'
+}) {
   return (
     <p
-      className={`m-0 font-mono text-[11.5px] font-medium uppercase tracking-[0.16em] text-faint ${className}`}
+      className={`m-0 font-mono text-[11.5px] font-medium uppercase tracking-[0.16em] ${
+        tone === 'muted' ? 'text-muted' : 'text-faint'
+      } ${className}`}
     >
       {children}
     </p>

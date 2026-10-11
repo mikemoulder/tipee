@@ -273,8 +273,11 @@ export function Faq({ audience }: { audience: Audience }) {
  */
 export function TestnetNotice({ className = '' }: { className?: string }) {
   return (
-    <Pill tone="butter" className={className}>
-      <span className="size-1.5 shrink-0 rounded-pill bg-ink/50" />
+    /* Outline, not butter. This is a caveat, not a highlight — the yellow
+       version drew the eye harder than the headline did, and on a white page
+       beside a black-and-white clip it was the last warm thing left. */
+    <Pill tone="outline" className={className}>
+      <span className="size-1.5 shrink-0 rounded-pill bg-faint" />
       <span>
         <strong className="font-bold">Arc testnet.</strong> The USDC is test currency — worth
         nothing anywhere else.

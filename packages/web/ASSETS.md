@@ -1,5 +1,53 @@
 # Assets — what to send, and where it goes
 
+## Already landed: the hero clip
+
+`public/clips/hero.mp4` + `hero-poster.jpg` — a black-and-white POV motorcycle
+ride, looping full-bleed **behind** the hero on `/`, under a frosted white pane
+that the headline, lookup and body copy sit on top of. Licensed for commercial
+use and supplied by the owner. Rendered by `components/hero-clip.tsx`, which
+carries the reasoning for how the frost is built and where its numbers come
+from.
+
+It carries **no claim about the product** and that is the condition of it being
+there at all: nobody in it is using Tipee, no screen in it is ours, and it is
+not standing in for a screenshot nobody has taken yet. It sets a tempo. That is
+why it is `aria-hidden`, why a reader who asks for reduced motion gets the
+poster frame as a still instead, and why every asset below is still worth
+sending.
+
+### Re-cutting it
+
+The 4K master lives in `Free Videos/Hero.mp4` at the repo root and is
+**gitignored** — 117 MB for ten seconds. The shipped encode is 2.4 MB, and the
+gap between those two numbers is the whole job: black-and-white foliage under
+motion blur is about as hostile as H.264 input gets, and a straight 1080p
+transcode of this clip lands at 16 MB. Four things brought it down, in order of
+how much they mattered: cropping to the band's real 21:9 (throws away 40% of the
+pixels rather than encoding pixels the layout then hides), `hqdn3d` before the
+scaler (the grain is what was eating the bitrate), 24fps, and only then CRF.
+
+```bash
+# ffmpeg is not a dependency of this repo; npx it or install it however.
+CH="crop=iw:iw*9/21,scale=1600:-2:flags=lanczos,hqdn3d=4:3:6:6,fps=24,hue=s=0"
+ffmpeg -i "Free Videos/Hero.mp4" -i "Free Videos/Hero.mp4" -filter_complex   "[0:v]$CH,trim=0:6.4,setpts=PTS-STARTPTS[v0];    [1:v]$CH,trim=0:0.7,setpts=PTS-STARTPTS[v1];    [v0][v1]xfade=transition=fade:duration=0.7:offset=5.7[v]"   -map "[v]" -an -c:v libx264 -profile:v high -preset veryslow -crf 33   -pix_fmt yuv420p -g 48 -movflags +faststart -y packages/web/public/clips/hero.mp4
+
+ffmpeg -i packages/web/public/clips/hero.mp4 -frames:v 1 -q:v 6   -y packages/web/public/clips/hero-poster.jpg
+```
+
+The clip is fed to itself through `xfade` so the last 0.7s dissolves into the
+first frame: `loop` on a hard cut would jump the road sideways every 6 seconds.
+The poster **must** be regenerated from the encode, not the master — it is the
+first frame of what actually plays, and a poster that does not match frame one
+shows as a flash on load.
+
+VP9 was tried and dropped. At matched quality it came out **larger** than x264
+here (6.8 MB against 2.4 MB), which is the opposite of the usual result and is
+down to the denoised greyscale input; it bought nothing for a second 2 MB
+download and a `<source>` fork.
+
+---
+
 The site is **finished without any of these**. Every claim it makes is carried by
 the three live demos in `components/demo/`, which are real markup rather than
 recordings — they cost nothing to ship, stay sharp at any pixel density, and
@@ -32,10 +80,16 @@ single most valuable asset on the list: the demo shows where the button goes,
 but a photograph of it actually there is the difference between a claim and a
 receipt.
 
+Note that the hero clip does **not** do this job and was never going to — it is
+a motorcycle. This is still the most important thing missing from the site.
+
 - Load the extension unpacked (see `/install`), open any video, screenshot the
   player and action bar.
 - 2× DPI if you can. Light YouTube theme.
-- Use a channel you control or one that will not mind appearing.
+- Use a channel you control or one that will not mind appearing. Not a large
+  creator: their avatar and subscriber count beside a "tip this creator" button
+  reads as an endorsement they never gave. A channel you control is also the one
+  `shots/about-verified.png` needs, so both come out of one sitting.
 
 ### `brand/logo.svg` + `brand/mark.svg`
 

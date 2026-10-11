@@ -14,6 +14,13 @@ build/
 .env.*.local
 .claude/settings.local.json
 
+# Video masters. `Free Videos/` holds the 4K source the hero loop is cut from
+# (117 MB for 10 seconds). What ships is the 2.4 MB derived encode in
+# packages/web/public/clips/, which IS committed — the recipe that produces it
+# is in packages/web/ASSETS.md, so the master is reproducible input, not an
+# artifact anybody needs to clone.
+Free Videos/
+
 # Extension build artifacts
 packages/extension/dist/
 *.crx

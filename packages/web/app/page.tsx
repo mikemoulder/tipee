@@ -1,6 +1,7 @@
 import { MIN_TIP, formatUsdc } from '@tipee/shared'
 
 import { ChannelLookup } from '@/components/channel-lookup'
+import { HeroClip } from '@/components/hero-clip'
 import { TipDemo } from '@/components/demo/tip-demo'
 import { VerifyDemo } from '@/components/demo/verify-demo'
 import { Reveal } from '@/components/reveal'
@@ -33,16 +34,40 @@ export const metadata = {
  * conventional choice and it would halve the one thing here nobody else can
  * say; the demo gets the whole width immediately below instead, where it is
  * bigger than it could ever have been in a column.
+ *
+ * ## The backdrop
+ *
+ * The clip runs behind the whole hero, under frosted white glass — see
+ * components/hero-clip.tsx for why it is frosted rather than faded. The type
+ * sits on top of it and stays black, because the frost is graded to be nearly
+ * solid white down the left, where the type column is.
+ *
+ * There is no nameplate here. An earlier pass set "tipee" at poster size above
+ * the headline and it was wrong twice over: the wordmark already appears in the
+ * nav directly above it, and a hero whose largest element is the brand name is
+ * a hero that spends its fold telling you what it is called instead of what it
+ * does. The wordmark lives in the nav and nowhere else on the page.
+ *
+ * Kept from every version before it: the lookup is still the hero's only call
+ * to action, and it is still literally step one of /claim rather than a teaser
+ * for it. That is the one thing on this page no competitor can say, and no
+ * amount of art direction is worth spending it.
  */
 export default function CreatorPage() {
   return (
     <>
       {/* Hero ------------------------------------------------------------- */}
-      <section className="relative overflow-hidden">
-        <div className="aurora" aria-hidden="true" />
-        <Container className="relative z-10 pt-16 pb-20 sm:pt-24 sm:pb-24">
-          <div className="flex max-w-[860px] flex-col gap-7">
-            <Eyebrow>For creators</Eyebrow>
+      {/* The aurora is gone from this page. It was a soft wash standing in for
+          exactly the depth the clip now supplies, and running both put two
+          competing light sources behind one headline. */}
+      <section className="relative isolate overflow-hidden">
+        <HeroClip />
+
+        <Container className="relative z-10 pt-20 pb-24 sm:pt-28 sm:pb-32">
+          <div className="flex max-w-[780px] flex-col gap-7">
+            {/* `muted`, not the default `faint`: this one sits over the clip.
+                See the contrast note on Eyebrow. */}
+            <Eyebrow tone="muted">For creators</Eyebrow>
 
             <h1 className="m-0 text-hero font-extrabold text-balance">
               You might already have{' '}
@@ -63,9 +88,12 @@ export default function CreatorPage() {
                   preserveAspectRatio="none"
                   aria-hidden="true"
                 >
+                  {/* Forest, not the butter yellow this was. Green is the only
+                      hue left on the page and it means "actionable"; the words
+                      it underlines are the ones the lookup below answers. */}
                   <path
                     d="M2 9.5C58 4.2 128 2.5 190 4.1c40 1 90 3.4 128 6.6"
-                    stroke="#ffd24a"
+                    stroke="#1c7a34"
                     strokeWidth="6"
                     strokeLinecap="round"
                   />

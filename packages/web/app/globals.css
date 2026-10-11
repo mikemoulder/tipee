@@ -1,27 +1,32 @@
 @import "tailwindcss";
 
 /*
- * Tipee — the warm expression.
+ * Tipee — white, black, grey, green.
  *
- * The extension speaks a cool, austere version of this language: sage ground,
- * monospace everywhere, a dark forest green. The site deliberately warms it,
- * because a landing page and a 360px popup are not doing the same job. A popup
- * is a tool somebody already chose; a landing page has to be liked before it is
- * read.
+ * This replaces a cream-and-butter "warm expression" that read as every other
+ * generated landing page: soft ground, rounded everything, a yellow highlight
+ * under the headline. The ground is now plain white, the ink is near-black, the
+ * surfaces are neutral greys, and the extension's forest green is the only hue
+ * left on the page. Yellow is retired from the marketing surface; the token
+ * stays because the gift glyph's ribbon still uses it.
  *
- * Two things carry across unchanged so the two still read as one product: the
- * forest green, and the corner-tick motif. Everything else warms — the ground
- * moves from sage to cream, body type from mono to a friendly grotesque, and
- * corners round off. Monospace is kept, but demoted to the job it is actually
- * best at: amounts, addresses, handles and code.
+ * The discipline this buys: a black-and-white hero clip and the rest of the
+ * page belong to the same world, and anything green is, without exception,
+ * something you can act on.
+ *
+ * Two things still carry across from the extension so the two read as one
+ * product: the forest green, and the corner-tick motif. Type stays split the
+ * way it was — a grotesque for prose, monospace kept for what it is genuinely
+ * better at (amounts, addresses, handles, code) — with one face added above
+ * both for the nameplate.
  */
 @theme {
   /* Ground and surfaces ------------------------------------------------- */
-  --color-cream: #fffbf4;      /* page ground — warm, never white */
+  --color-cream: #ffffff;      /* page ground — plain white, the new direction */
   --color-card: #ffffff;       /* raised surfaces */
-  --color-tint: #fbf5ea;       /* insets, secondary fill */
-  --color-shell: #f6efe2;      /* section bands, browser chrome */
-  --color-rule: #ece3d4;       /* hairlines */
+  --color-tint: #f4f6f4;       /* insets, secondary fill */
+  --color-shell: #eef1ee;      /* section bands, browser chrome */
+  --color-rule: #e2e6e2;       /* hairlines */
 
   /* Brand --------------------------------------------------------------- */
   --color-forest: #1c7a34;     /* primary action — kept from the extension */
@@ -33,15 +38,20 @@
   --color-sky: #bfe0ff;        /* third accent, illustration only */
 
   /* Text ---------------------------------------------------------------- */
-  --color-ink: #171f12;
-  --color-muted: #515f4a;      /* body secondary — ~7:1 on cream */
-  --color-faint: #6b7864;      /* labels, captions — ~4.5:1 on cream */
-  --color-on-forest: #fffdf7;
+  --color-ink: #0a0d0a;
+  --color-muted: #55604f;      /* body secondary — ~7:1 on white */
+  --color-faint: #6d776b;      /* labels, captions — ~4.5:1 on white */
+  --color-on-forest: #ffffff;
   --color-danger: #b3401a;
 
   /* Type ---------------------------------------------------------------- */
   --font-sans: var(--font-jakarta), "Segoe UI", system-ui, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, "Cascadia Mono", monospace;
+  /* Display only — the masthead and the nav wordmark, never a paragraph.
+     Anton ships a single weight that is already black, so there is nothing to
+     set: asking for 700 would get a synthesised bold on top of a face that is
+     heavy by design. */
+  --font-display: var(--font-anton), "Haettenschweiler", "Arial Narrow", sans-serif;
 
   --text-hero: clamp(2.6rem, 6.2vw, 4.75rem);
   --text-hero--line-height: 1.02;
@@ -67,11 +77,12 @@
   --radius-xl: 32px;
   --radius-pill: 999px;
 
-  /* Shadows are warm-tinted, never neutral grey — a cool shadow on a cream
-     ground reads as dirt. */
-  --shadow-soft: 0 1px 2px rgba(60, 42, 20, 0.04), 0 8px 24px -12px rgba(60, 42, 20, 0.14);
-  --shadow-lift: 0 2px 4px rgba(60, 42, 20, 0.05), 0 18px 40px -18px rgba(60, 42, 20, 0.22);
-  --shadow-float: 0 4px 8px rgba(60, 42, 20, 0.06), 0 34px 70px -28px rgba(60, 42, 20, 0.3);
+  /* Neutral, not warm. The earlier cream expression tinted these brown so they
+     would not read as dirt on a cream ground; on white, beside a black-and-white
+     clip, a warm shadow is the thing that reads as dirt instead. */
+  --shadow-soft: 0 1px 2px rgba(10, 13, 10, 0.04), 0 8px 24px -12px rgba(10, 13, 10, 0.16);
+  --shadow-lift: 0 2px 4px rgba(10, 13, 10, 0.05), 0 18px 40px -18px rgba(10, 13, 10, 0.2);
+  --shadow-float: 0 4px 8px rgba(10, 13, 10, 0.06), 0 34px 70px -28px rgba(10, 13, 10, 0.26);
 }
 
 html {
@@ -123,8 +134,10 @@ body {
 }
 
 /*
- * Warm light behind the hero. Two soft radial washes rather than an image —
- * they cost nothing, scale to any viewport, and cannot arrive late.
+ * A single green wash behind the hero. This used to be two, the larger of them
+ * butter yellow; on white, next to a black-and-white clip, a yellow haze was
+ * the one thing on the page that looked like an accident. Green is now the only
+ * hue above the fold, and it is barely there.
  */
 /*
  * z-index 0, not -1. A negative-z child of a section that creates no stacking
@@ -140,28 +153,16 @@ body {
   pointer-events: none;
 }
 
-.aurora::before,
-.aurora::after {
+.aurora::before {
   content: "";
   position: absolute;
+  width: 48rem;
+  height: 48rem;
+  top: -26rem;
+  right: -16rem;
   border-radius: 50%;
   filter: blur(72px);
-}
-
-.aurora::before {
-  width: 46rem;
-  height: 46rem;
-  top: -22rem;
-  right: -14rem;
-  background: radial-gradient(circle, rgba(255, 210, 74, 0.5), rgba(255, 210, 74, 0) 68%);
-}
-
-.aurora::after {
-  width: 40rem;
-  height: 40rem;
-  top: -10rem;
-  left: -18rem;
-  background: radial-gradient(circle, rgba(52, 168, 83, 0.28), rgba(52, 168, 83, 0) 68%);
+  background: radial-gradient(circle, rgba(52, 168, 83, 0.16), rgba(52, 168, 83, 0) 70%);
 }
 
 /*

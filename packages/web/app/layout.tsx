@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { JetBrains_Mono, Plus_Jakarta_Sans } from 'next/font/google'
+import { Anton, JetBrains_Mono, Plus_Jakarta_Sans } from 'next/font/google'
 
 import './globals.css'
 import { SiteFooter } from '@/components/site-footer'
@@ -17,11 +17,25 @@ import { SiteNav } from '@/components/site-nav'
  * reads as a terminal, and the whole point of this expression is that it should
  * not. Mono is kept for what it is genuinely better at: amounts, addresses,
  * handles and code, where the tabular figures and the unambiguous zero matter.
+ *
+ * Anton sits above both and is used for exactly two things: the hero nameplate
+ * and the nav wordmark. It ships one weight, which is already black — there is
+ * no 700 to ask for, and asking would get a synthesised bold smeared over a
+ * face that is heavy by design. It is also condensed, which is the whole reason
+ * it is here: the masthead can run at 11rem without overrunning its measure,
+ * and narrow letterforms read as forward motion beside a clip of a road.
  */
 const jakarta = Plus_Jakarta_Sans({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700', '800'],
   variable: '--font-jakarta',
+  display: 'swap',
+})
+
+const anton = Anton({
+  subsets: ['latin'],
+  weight: ['400'],
+  variable: '--font-anton',
   display: 'swap',
 })
 
@@ -58,12 +72,12 @@ export const metadata: Metadata = {
 
 /** Matches the page ground, so mobile browser chrome does not sit on a seam. */
 export const viewport: Viewport = {
-  themeColor: '#fffbf4',
+  themeColor: '#ffffff',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${jakarta.variable} ${jetbrains.variable}`}>
+    <html lang="en" className={`${jakarta.variable} ${anton.variable} ${jetbrains.variable}`}>
       <head>
         {/*
           Marks the document as scripted before first paint, which is what

@@ -21,9 +21,15 @@ Tipee is a Manifest V3 browser extension for tipping YouTube creators in Arc tes
 - This workspace **is** a git repository, on `main`.
 
 ## Latest Validation
-Run 2026-09-15, all from the repo root — `npx tsc --build` exits 0, `npm test`
-passes 359 in 21 files, and `npm run build` compiles all four workspaces
-including the rebuilt site (4 static routes):
+Re-run 2026-09-15 after the white/Anton/overlaid-video rebuild — `npx tsc --build` exits
+0, `npm test` passes **359 in 21 files**, and `npm run build` compiles all four
+workspaces. The site's four routes still prerender static, and `/` served
+locally returns 200 along with `/clips/hero.mp4` (2,559,857 bytes) and
+`/clips/hero-poster.jpg`. Hero, `/viewers` and phone width (390px, via the
+iframe trick below) were photographed and checked, not just built, and hero text
+contrast was measured against every frame of the clip rather than eyeballed.
+
+Earlier the same day, before that rebuild:
 - `npm test` — **359 passed**, 21 files.
 - `npx tsc --build` — clean.
 - `npm run build` — extension output written to `packages/extension/dist/`; `dist/content.js` verified as a single file with no module syntax.
@@ -44,6 +50,152 @@ The chain probe that earlier drafts of this document listed as a blocker has bee
 2. Composer popup: creator context, amount presets, minimum and balance-plus-gas validation, memo with a byte budget, PIN entry, confirm step, signing, broadcast, result states.
 3. Service worker: resolves escrow, unlocks the wallet, rebuilds the call, **re-checks balance and gas after the PIN is typed** (the composer's estimate predates it), signs, sends.
 4. Popup: onboarding (welcome, PIN, seed reveal, backup check), home balance, recent activity, deposit with QR, withdraw, settings with seed reveal.
+
+## Built This Slice: white, black, grey, green, and a clip behind the type (2026-09-15, later)
+
+The owner's verdict on the warm rebuild from earlier the same day: *"tipee
+current website is just like all the other ai slop website"*. Fair. Cream
+ground, rounded everything, a butter-yellow highlighter under the headline and
+a soft aurora behind it is the house style of every generated landing page.
+
+Decisions, all the owner's:
+
+1. **A supplied clip carries the hero** - free-for-commercial-use footage at
+   `Free Videos/Hero.mp4`. Black and white, POV motorcycle, 10s.
+2. **The background stays white.** Not cream.
+3. **The wordmark is `tipee`, lowercase, black, in a fast face** -> Anton.
+4. **White majority, with black, grey and the extension's green.** Butter yellow
+   retired from the marketing surface.
+5. **The type is overlaid on the clip**, with frosted blur for readability.
+6. **The wordmark lives in the nav and nowhere else.**
+
+### Two things were built wrong first, and both are worth recording
+
+**A nameplate nobody asked for.** The first pass set "tipee" at poster size at
+the top of the hero body. The brief said "the hero logo text" and that was read
+as licence to invent a masthead. It was wrong on its own terms too: the wordmark
+already sits in the nav a few pixels above, and a hero whose largest element is
+the brand name spends its fold saying what the product is called instead of what
+it does. There is now exactly one wordmark on the page and it is in the nav.
+
+**The clip under the type instead of behind it.** The first pass put the footage
+in a full-bleed band *below* the hero text. Overlaying was the actual request.
+
+Both were avoidable by reading the brief as written rather than as a prompt.
+
+### The frost, and where its numbers come from
+
+Black type over black-and-white footage is the hard case: a single frame runs
+from blown-out sky to near-black road, so a flat opacity fade leaves dark
+patches dark and any word that lands on one fails.
+
+**The blur is what fixes that, not the white.** Blurring the backdrop destroys
+the local contrast that makes patches, so what sits behind the text becomes near
+enough a single mid-tone that a white veil lifts predictably.
+
+The first frosted build applied one flat sheet across the whole hero and it was
+mush - strong enough to carry type on the left, it also made the right two
+thirds unidentifiable, and a backdrop nobody can tell is a motorcycle is worse
+than no backdrop. So the blur is **masked**: full strength under the type
+column, gone by 84% across, leaving the bike sharp where nothing is written.
+`mask-image` clips an element and its `backdrop-filter` together, so this costs
+one div and no JavaScript.
+
+The veil stops are set by a **measured contrast floor**, not by eye. Every frame
+of the shipped loop was extracted, Gaussian-blurred at the CSS radius, and
+composited under the authored gradient; the darkest result anywhere in the type
+column is the number the stops are chosen against:
+
+| text | worst case | needs | |
+|---|---|---|---|
+| ink, headline, large | 14.37:1 | 3.0 | pass |
+| forest green, large | 3.98:1 | 3.0 | pass |
+| muted, body 18px | 4.87:1 | 4.5 | pass |
+| muted, eyebrow 11.5px | 4.87:1 | 4.5 | pass |
+
+86% white measures 4.87:1 against the darkest frame and 80% measures 4.1:1,
+which is why the veil holds >=86% across the whole column before falling away.
+
+Two findings from doing this:
+
+- **The eyebrow failed at `text-faint`** - 3.43:1, against a 4.5 bar at 11.5px.
+  `Eyebrow` now takes a `tone` prop. It is a **prop and not a className**
+  because both candidates are `color` utilities and Tailwind settles that
+  conflict by stylesheet order, not by the order the classes are written - a
+  `text-muted` passed in from outside can silently lose. Same trap the nav's
+  Add-to-Chrome button already documents.
+- **Screenshotting the page to measure this does not work.** Under
+  `--virtual-time-budget` the video does not advance, so every frame sampled is
+  identical, and text glyphs contaminate any band you sample. Measure the clip
+  and the CSS, not the screenshot.
+
+### The mobile veil bug, which shipped for one build
+
+The left-to-right grading is correct wide and **wrong narrow**, and it went out
+that way before a phone screenshot caught it. On a phone the type column *is*
+the full width, so the thin right-hand end of the veil sat under the tail of
+every wrapped line - "worth nothing anywhere else" ran straight across the bike.
+
+Narrow, the veil is now near-flat at 90-93% and the blur is unmasked: there is
+no text-free region to protect, so there is nothing to grade toward. Measured
+the same way, worst case 5.39:1 for body copy.
+
+The general lesson: **a gradient that protects text is a function of where the
+text is**, and where the text is changes at every breakpoint.
+
+### 117 MB in, 2.4 MB out
+
+Straight 1080p transcode of that master: **16 MB**. Black-and-white foliage under
+motion blur is close to worst-case H.264 input. What fixed it, in order of
+effect: crop to the band's real 21:9 first (stop encoding pixels the layout
+hides), `hqdn3d` before the scaler (grain was eating the bitrate), 24fps, then
+CRF. Full command in `packages/web/ASSETS.md`; the master is gitignored.
+
+- **VP9 came out bigger than x264 here** - 6.8 MB against 2.4 MB at matched
+  quality, the opposite of the usual result, because the input is denoised
+  greyscale. Dropped; there is no `<source>` fork.
+- **The loop is an `xfade` of the clip into itself.** `loop` on a hard cut jumps
+  the road sideways every six seconds.
+
+### The clip is decoration, and the docs say so out loud
+
+It is a motorcycle. It proves nothing about tipping anybody. That is acceptable
+for a hero - it sets a tempo - but it is **not** an asset in the `ASSETS.md`
+sense and must never stand in for one. `shots/gift-button.png`, the Tipee button
+on a real watch page, is still the most important thing missing from this site,
+and is now easier to forget because the hero looks finished.
+
+It is `aria-hidden`, and `hero-clip.tsx` renders the **poster as a still** for
+`prefers-reduced-motion`. That is a JavaScript branch and not a CSS rule on
+purpose: there is no way to stop `autoPlay` from a stylesheet, and the first
+render is always the still, so a reader who asked for no motion never gets one
+frame of it.
+
+### Also changed
+
+- `TestnetNotice` went from `tone="butter"` to `tone="outline"`. It is a caveat,
+  not a highlight, and in yellow it pulled harder than the headline.
+- The headline's underline is forest green. Green now means "actionable"
+  without exception.
+- The aurora is gone from `/` entirely - it was standing in for exactly the
+  depth the clip now supplies, and running both put two light sources behind one
+  headline. It survives on other routes.
+- `Wordmark` is Anton and carries **no weight class**: the face has one weight,
+  already black, and `font-extrabold` on top asks the browser to synthesise a
+  bold that smears the stems at nav size.
+- `/viewers` is untouched apart from the palette. It has its own hero.
+
+## A trap that cost a build: node_modules was renamed to `Videos`
+
+Mid-session, `node_modules/` at the repo root was renamed to `Videos/` — almost
+certainly a mis-click while making a folder for the hero footage. The symptom is
+`'next' is not recognized as an internal or external command` and nothing else;
+nothing says a directory moved. `git status` stays clean because `node_modules/`
+is ignored, so the usual instinct of checking git tells you nothing.
+
+If a build suddenly cannot find a binary it found ten minutes ago, check that
+`node_modules/` still exists under that name before reinstalling anything.
+Renaming it back is instant; a reinstall is not.
 
 ## Built This Slice: the website, rebuilt warm (2026-09-15)
 
@@ -246,6 +398,33 @@ The two items that are genuinely gaps rather than polish:
    independent of the website, and it degrades asset 1 in `ASSETS.md`.
 
 Six open decisions are listed at the end of `website-plan.md` and should be answered before phase 2.
+
+### Asset 1: which channel the gift-button shot is taken on (asked 2026-09-15)
+
+The owner proposed capturing `shots/gift-button.png` on a **MrBeast** watch page.
+Answered: the *frame* is right — dark-theme watch page, full action bar, real
+view count — but the channel is not, and the shot as proposed is a "before"
+anyway (no Tipee button in it, since the extension was not loaded).
+
+Rejected for the same reason creator faces are excluded from `ASSETS.md`: a
+hero showing a named creator's avatar, handle, verified badge and subscriber
+count beside a "tip this creator" button reads as an endorsement nobody gave,
+and to a judge it reads as fabricated traction. MrBeast is the strongest
+possible version of that mistake, not an exception to it.
+
+Recommended instead, in order:
+1. **A channel the owner controls.** Needed regardless — `shots/about-verified.png`
+   requires a channel whose About page we can edit, so both assets come from one
+   session.
+2. A small channel that has explicitly agreed to appear.
+3. A tight crop of the action-bar row alone — Tipee beside Like, no avatar, no
+   handle, no title. Legible on mobile, and it is the only thing the image is
+   there to prove. Weakest on "this is a real page", strongest on permission.
+
+Capture notes for whichever is chosen: load the extension unpacked first (the
+button does not exist otherwise), fix the extension icons before shooting
+anything with the toolbar in frame, crop to 1600 x 900, and take light theme as
+well as dark — `website-plan.md` asks for both.
 
 ## Fixed This Slice: the gift button never loaded
 
