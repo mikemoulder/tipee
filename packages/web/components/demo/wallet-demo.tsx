@@ -26,7 +26,7 @@ const STEPS = [
 type Step = (typeof STEPS)[number]['name']
 
 const BALANCE = 42_180_000n
-const ADDRESS = '0x7a3f…c41e'
+const ADDRESS = 'CDMR4Y…W64M'
 
 const ACTIVITY = [
   { label: 'Tipped @pixelforge', amount: -5_000_000n, age: '3h ago' },
@@ -58,7 +58,7 @@ export function WalletDemo({ className = '' }: { className?: string }) {
               tipee
             </span>
             <span className="rounded-pill bg-white px-2 py-0.5 text-[9px] text-[#55634e]">
-              Arc testnet
+              Stellar testnet
             </span>
           </div>
 
@@ -161,8 +161,8 @@ function ActivityScreen() {
       {/* The real popup says which source answered, because an out-of-range tip
           and a tip that never happened otherwise look identical. */}
       <p className="m-0 mt-auto text-[9px] leading-relaxed text-[#8b9784]">
-        Read from the Arc explorer. Outgoing tips are named from a local journal —
-        the chain only knows the address.
+        Read from Stellar's USDC events. Outgoing tips are named from a local journal —
+        the chain only knows the channel ID.
       </p>
     </div>
   )
@@ -181,7 +181,7 @@ function DepositScreen() {
         {ADDRESS}
       </span>
       <p className="m-0 mt-auto text-center text-[9px] leading-relaxed text-[#8b9784]">
-        USDC on Arc testnet only. Sending another asset or another network loses it.
+        USDC on Stellar testnet only. Sending another asset or another network loses it.
       </p>
     </div>
   )

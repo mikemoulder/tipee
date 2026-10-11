@@ -2,45 +2,26 @@
 
 import Link from 'next/link'
 import { useId, useState } from 'react'
-import { formatUsdc, parseChannelRef, type ChannelRef } from '@tipee/shared'
+import { formatUsdc, parseChannelRef, parseUsdc } from '@tipee/shared'
+
+import { resolveChannel } from './api'
 
 /**
  * The hero lookup — step one of `/claim`, sitting on the landing page.
  *
  * Parsing runs through `@tipee/shared`'s `parseChannelRef`, the same function
  * the extension and the API use, so what the site accepts and what the backend
- * accepts cannot drift. It handles a full URL, a bare `@handle`, a raw channel
- * ID and the legacy `/c/` and `/user/` paths.
+ * accepts cannot drift.
  *
- * ## On the demo balances
- *
- * `POST /api/creators/claim` does not exist yet, so a balance has to come from
- * somewhere. It comes from two **fictional** handles, and that matters: an
- * earlier version of this file keyed its sample balances to `@fireship` and
- * `@veritasium`, real channels with real owners. Typing a real handle and being
- * told $127 was waiting for it would have been a false statement about a
- * stranger's money, made by a site whose entire pitch is that it can be trusted
- * with money. Real channels now fall through to the zero state, which is simply
- * true — nothing has been tipped, because nothing is live.
- *
- * The sample result is labelled as one. When the endpoint lands, only `lookUp`
- * and `SAMPLES` change.
+ * The balance is live: the API resolves the handle against YouTube and reads
+ * what the escrow contract holds under that channel ID on Stellar testnet. No
+ * samples — a figure shown here is a figure on chain.
  */
 type Result =
-  | { state: 'balance'; handle: string; balance: bigint; tips: number }
+  | { state: 'balance'; handle: string; balance: bigint }
   | { state: 'zero'; handle: string }
   | { state: 'unparseable' }
-
-const SAMPLES: Record<string, { balance: bigint; tips: number }> = {
-  '@pixelforge': { balance: 127_000_000n, tips: 41 },
-  '@northbound': { balance: 48_500_000n, tips: 17 },
-}
-
-function describe(ref: ChannelRef): string {
-  if (ref.kind === 'handle') return ref.handle
-  if (ref.kind === 'channelId') return ref.channelId
-  return ref.path
-}
+  | { state: 'error'; message: string }
 
 export function ChannelLookup({
   autoFocus = false,
@@ -55,24 +36,28 @@ export function ChannelLookup({
   const inputId = useId()
   const large = size === 'lg'
 
-  function lookUp(event: React.FormEvent) {
+  async function lookUp(event: React.FormEvent) {
     event.preventDefault()
     const ref = parseChannelRef(value)
-    if (!ref) {
+    // The API resolves handles; a channel URL or ID is shown the claim page,
+    // which asks for the handle it needs.
+    if (!ref || ref.kind !== 'handle') {
       setResult({ state: 'unparseable' })
       return
     }
 
-    // A lookup that resolves the instant you press the key reads as canned.
-    // The real one will take a round trip to YouTube; this holds the same
-    // shape so the wiring later changes nothing a reader can see.
     setBusy(true)
-    const key = describe(ref).toLowerCase()
-    window.setTimeout(() => {
-      const hit = SAMPLES[key]
-      setResult(hit ? { state: 'balance', handle: key, ...hit } : { state: 'zero', handle: key })
+    try {
+      const found = await resolveChannel(ref.handle)
+      const balance = parseUsdc(found.unclaimed_balance)
+      setResult(
+        balance > 0n ? { state: 'balance', handle: found.handle, balance } : { state: 'zero', handle: found.handle },
+      )
+    } catch (error) {
+      setResult({ state: 'error', message: error instanceof Error ? error.message : 'Could not look that up.' })
+    } finally {
       setBusy(false)
-    }, 520)
+    }
   }
 
   return (
@@ -119,15 +104,8 @@ export function ChannelLookup({
           learns what a hit looks like. */}
       {!result && (
         <p className="m-0 text-[13px] text-muted">
-          Nothing to sign up for.{' '}
-          <button
-            type="button"
-            onClick={() => setValue('youtube.com/@pixelforge')}
-            className="cursor-pointer border-0 bg-transparent p-0 font-mono text-[13px] font-semibold text-forest underline underline-offset-2 hover:text-deep"
-          >
-            Try @pixelforge
-          </button>{' '}
-          to see what a channel with tips waiting looks like.
+          Nothing to sign up for. Any channel works — the balance is read live from the escrow
+          contract on Stellar testnet.
         </p>
       )}
 
@@ -139,22 +117,21 @@ export function ChannelLookup({
                 <span className="font-mono text-[11.5px] tracking-[0.12em] text-deep uppercase">
                   Waiting for {result.handle}
                 </span>
-                {/* Never let a sample pass as a live balance. */}
                 <span className="rounded-pill bg-deep/10 px-2.5 py-1 font-mono text-[10.5px] font-semibold text-deep">
-                  Sample channel
+                  Live · Stellar testnet
                 </span>
               </div>
               <span className="text-[clamp(2.4rem,7vw,3.4rem)] leading-none font-extrabold tabular-nums text-deep">
                 ${formatUsdc(result.balance)}
               </span>
               <span className="text-[14px] text-deep/75">
-                across {result.tips} tips · yours once you verify the channel
+                in escrow · yours once you verify the channel
               </span>
               <Link
-                href="/#verify"
+                href={`/claim?handle=${encodeURIComponent(result.handle)}`}
                 className="mt-2 inline-flex w-fit items-center gap-2 rounded-pill bg-forest px-5 py-2.5 text-[14px] font-bold text-on-forest no-underline transition-colors hover:bg-deep"
               >
-                How claiming works →
+                Claim it →
               </Link>
             </div>
           </div>
@@ -168,9 +145,9 @@ export function ChannelLookup({
               Nothing yet — but {result.handle} is ready for it.
             </span>
             <p className="m-0 text-[14px] leading-relaxed text-muted">
-              No tips have been sent to this channel. There is nothing for you to sign up for: the
-              moment someone tips it, a wallet is created and the money is held here under your
-              channel ID until you come and get it.
+              No tips are waiting for this channel. There is nothing for you to sign up for: the
+              moment someone tips it, the money is held in the escrow contract under your channel ID
+              until you come and get it.
             </p>
             <p className="m-0 text-[14px] leading-relaxed text-muted">
               The fastest way to change that is to let your viewers know the button exists.
@@ -192,9 +169,13 @@ export function ChannelLookup({
           </div>
         )}
 
+        {result?.state === 'error' && (
+          <p className="m-0 text-[13.5px] text-danger">{result.message}</p>
+        )}
+
         {result?.state === 'unparseable' && (
           <p className="m-0 flex flex-wrap items-center gap-1.5 text-[13.5px] text-danger">
-            That does not look like a channel. Try your channel page URL — something like
+            That does not look like a handle. Try your channel URL — something like
             <code className="rounded-sm bg-card px-2 py-0.5 font-mono text-[12.5px]">
               youtube.com/@yourhandle
             </code>

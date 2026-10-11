@@ -14,14 +14,14 @@ import { Card, Eyebrow, Pill, Section } from './ui'
 export function BuiltOn() {
   const marks = [
     {
-      name: 'Arc',
-      claim: 'USDC is the gas token',
-      body: 'On Arc the fee to send a tip is paid in the same asset as the tip. No second token to acquire before you can give someone a dollar — which is normally the exact reason this kind of thing never gets used.',
+      name: 'Stellar',
+      claim: 'Smart wallets, no XLM',
+      body: 'Your Tipee wallet is a Soroban contract account. It holds USDC with no trustline and no XLM reserve, and Tipee pays every network fee — so you never need a second token before you can give someone a dollar.',
     },
     {
-      name: 'Circle',
-      claim: 'Escrow, per channel',
-      body: 'Every channel gets a Circle-managed wallet the first time anyone tips it, keyed to the channel ID rather than the handle — so renaming a channel never separates a creator from their money.',
+      name: 'Soroban escrow',
+      claim: 'Held by channel ID',
+      body: 'Tips wait in one escrow contract, keyed to the channel ID rather than the handle — so renaming a channel never separates a creator from their money, and nobody needs a wallet before they can be tipped.',
     },
   ]
 
@@ -61,7 +61,7 @@ export function Custody() {
     },
     {
       title: 'Creator funds sit in escrow, not our wallet',
-      body: 'Tips are held in a Circle wallet tied to the channel. We custody it before verification because there is nobody to hand it to yet — not because we want to.',
+      body: 'Tips are held by the Tipee escrow contract on Stellar, under the channel ID. Releasing them takes our verifier’s signature, which we give only after the channel proves it is yours.',
     },
     {
       title: 'Identity is resolved server-side',
@@ -133,7 +133,7 @@ export function TheSplit() {
             },
             {
               title: 'Network fees are separate and tiny',
-              body: 'The gifter pays them when they send, in USDC, because that is the gas token on Arc.',
+              body: 'Tipee pays them. They are a fraction of a cent on Stellar, and paying them is what lets a wallet hold nothing but USDC.',
             },
           ].map((item) => (
             <div key={item.title} className="flex gap-3">
@@ -190,42 +190,42 @@ const questions: { q: string; a: string; who: Audience | 'both' }[] = [
   {
     who: 'both',
     q: 'Is this real money?',
-    a: 'Not yet. Tipee runs on Arc testnet, so the USDC moving through it has no value outside the test network. Everything else — the wallets, the escrow, the split — works exactly as it would on mainnet.',
+    a: 'Not yet. Tipee runs on Stellar testnet, so the USDC moving through it has no value outside the test network. Everything else — the wallets, the escrow contract, the split — works exactly as it would on mainnet.',
   },
   {
     who: 'creator',
     q: 'Do I need an account before people can tip me?',
-    a: 'No, and that is the point. The first time anyone tips your channel, a wallet is created for it automatically. You only turn up when you want to take the money out.',
+    a: 'No, and that is the point. Tips wait in the escrow contract under your channel ID from the first one. You only turn up when you want to take the money out.',
   },
   {
     who: 'creator',
     q: 'How do you know the channel is mine?',
-    a: 'You add a link we give you to your channel’s About page. Only someone who can edit that page can do it, which is the same thing as controlling the channel. Then you remove it again if you like.',
+    a: 'You add a short code we give you to your channel description. Only someone who can edit the channel can do it, which is the same thing as controlling it. Then you remove it again if you like.',
   },
   {
     who: 'creator',
     q: 'What if I change my handle?',
-    a: 'Nothing happens. Wallets are keyed to the channel ID, which never changes, rather than the handle, which can be reassigned to someone else entirely.',
+    a: 'Nothing happens. The escrow is keyed to the channel ID, which never changes, rather than the handle, which can be reassigned to someone else entirely.',
   },
   {
     who: 'creator',
     q: 'What if nobody ever claims a channel?',
-    a: 'The money stays in that channel’s escrow wallet. There is no expiry and we do not sweep it — it is not ours, and a deadline would only mean taking it from someone who was slow to hear about us.',
+    a: 'The money stays in the escrow under that channel ID. There is no expiry and no sweep in the contract — it is not ours, and a deadline would only mean taking it from someone who was slow to hear about us.',
   },
   {
     who: 'viewer',
     q: 'Where is my wallet kept?',
-    a: 'In your browser. The extension generates it on first run and encrypts it with a PIN you choose. Nothing is uploaded, and we cannot recover it for you — which is also why it asks you to write the recovery phrase down before you can use it.',
+    a: 'Your key is in your browser: the extension generates it on first run and encrypts it with a PIN you choose. Your money is in a Stellar smart wallet that only that key controls. Nothing secret is uploaded and we cannot recover it for you — which is why it asks you to write the recovery phrase down first. The phrase is standard (SEP-5), so it works in other Stellar wallets too.',
   },
   {
     who: 'viewer',
     q: 'What does it cost me to send a tip?',
-    a: 'The tip, plus a network fee of a fraction of a cent. Because Arc uses USDC for gas, both come out of the same balance and you never need a second token.',
+    a: 'The tip, and nothing else. Tipee pays the Stellar network fee, so your wallet only ever holds USDC — no XLM, no second token.',
   },
   {
     who: 'viewer',
     q: 'Does the creator get it straight away?',
-    a: 'The money reaches their escrow wallet in the same transaction you sign. They collect it whenever they verify the channel — there is no waiting period on our side.',
+    a: 'The money reaches the escrow in the same transaction you sign, about five seconds later. They collect it whenever they verify the channel — there is no waiting period on our side.',
   },
   {
     who: 'viewer',
@@ -279,7 +279,7 @@ export function TestnetNotice({ className = '' }: { className?: string }) {
     <Pill tone="outline" className={className}>
       <span className="size-1.5 shrink-0 rounded-pill bg-faint" />
       <span>
-        <strong className="font-bold">Arc testnet.</strong> The USDC is test currency — worth
+        <strong className="font-bold">Stellar testnet.</strong> The USDC is test currency — worth
         nothing anywhere else.
       </span>
     </Pill>

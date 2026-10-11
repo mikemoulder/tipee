@@ -162,11 +162,11 @@ export default function CreatorPage() {
             },
             {
               title: 'It is held for you',
-              body: 'The tip lands in a Circle escrow wallet tied to your channel ID. Not your handle — channel IDs never change hands, so renaming your channel can never separate you from it.',
+              body: 'The tip lands in the Tipee escrow contract on Stellar, held under your channel ID. Not your handle — channel IDs never change hands, so renaming your channel can never separate you from it.',
             },
             {
               title: 'You verify and withdraw',
-              body: 'Add a link we give you to your About page to prove the channel is yours, then withdraw to any wallet you like. The link can come straight back down afterwards.',
+              body: 'Add a code we give you to your channel description to prove the channel is yours, then claim to any Stellar address you like. The code can come straight back down afterwards.',
             },
           ]}
         />

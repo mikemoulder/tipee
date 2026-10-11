@@ -82,7 +82,7 @@ export default function ViewersPage() {
             },
             {
               title: 'Confirm with your PIN',
-              body: 'Choose an amount, add a note if you want one, and confirm. The transfer is signed in your browser and lands on Arc a second later.',
+              body: 'Choose an amount, add a note if you want one, and confirm. Your wallet signs in your browser, Tipee pays the fee, and the tip lands on Stellar about five seconds later.',
             },
           ]}
         />

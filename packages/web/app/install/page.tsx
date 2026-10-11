@@ -16,7 +16,7 @@ export const metadata = {
  * today, which is what a judge or an early tester actually needs.
  */
 const COMMANDS = [
-  'git clone https://github.com/…/tipee.git',
+  'git clone https://github.com/mikemoulder/tipee.git',
   'cd tipee && npm install',
   'npm run build',
 ]

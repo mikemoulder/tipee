@@ -31,8 +31,8 @@ const groups: { title: string; links: { href: string; label: string; external?: 
   {
     title: 'Built on',
     links: [
-      { href: 'https://www.circle.com/arc', label: 'Arc', external: true },
-      { href: 'https://www.circle.com', label: 'Circle', external: true },
+      { href: 'https://stellar.org', label: 'Stellar', external: true },
+      { href: 'https://developers.stellar.org/docs/build/smart-contracts/overview', label: 'Soroban', external: true },
       { href: 'https://www.circle.com/usdc', label: 'USDC', external: true },
     ],
   },
@@ -83,7 +83,7 @@ export function SiteFooter() {
 
         <div className="flex flex-col gap-4 border-t border-rule pt-8 sm:flex-row sm:items-center sm:justify-between">
           <p className="m-0 max-w-[62ch] text-[12.5px] leading-relaxed text-muted">
-            <strong className="font-semibold text-ink">Running on Arc testnet.</strong> The USDC
+            <strong className="font-semibold text-ink">Running on Stellar testnet.</strong> The USDC
             moving through Tipee is test currency with no value anywhere else. Nothing here is an
             offer of financial services.
           </p>
