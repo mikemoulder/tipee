@@ -13,18 +13,40 @@ export interface CreatorRow {
   youtubeHandle: string
   displayName: string
   avatarUrl: string | null
-  circleWalletId: string
-  walletAddress: string
   isVerified: boolean
 }
 
+/**
+ * A creator needs no wallet of their own: every channel's tips sit in the one
+ * escrow contract, keyed by `youtubeChannelId`, until it is claimed.
+ */
 export interface NewCreator {
   youtubeChannelId: string
   youtubeHandle: string
   displayName: string
   avatarUrl: string | null
-  circleWalletId: string
-  walletAddress: string
+}
+
+/** A single-use, time-bound proof that somebody controls a channel. */
+export interface VerificationRow {
+  id: string
+  creatorId: string
+  token: string
+  expiresAt: Date
+  /** Set when the token was found on the channel page. */
+  verifiedAt: Date | null
+  /** Set when a claim was paid on the strength of it. */
+  usedAt: Date | null
+}
+
+export interface NewClaim {
+  creatorId: string
+  gross: bigint
+  fee: bigint
+  net: bigint
+  destination: string
+  feeAddress: string
+  txHash: string
 }
 
 export type TipStatusRow = 'pending' | 'confirmed' | 'failed'
@@ -63,8 +85,17 @@ export interface Store {
   tipByHash(txHash: string): Promise<TipRow | null>
   /** Returns the row that already exists when this hash was recorded before. */
   recordTip(tip: NewTip): Promise<TipRow>
-  /** Confirmed tips, less anything already withdrawn. Accounting units. */
-  unclaimedBalance(creatorId: string): Promise<bigint>
+  createVerification(creatorId: string, token: string, expiresAt: Date): Promise<VerificationRow>
+  verificationByToken(token: string): Promise<VerificationRow | null>
+  /** Marks the token as proven on the channel page, and the creator verified. */
+  markVerified(verificationId: string, creatorId: string): Promise<void>
+  /**
+   * Spends the token. Returns false when it was already spent, so two claims
+   * racing on one token cannot both be paid.
+   */
+  useVerification(verificationId: string): Promise<boolean>
+  creatorById(creatorId: string): Promise<CreatorRow | null>
+  recordClaim(claim: NewClaim): Promise<void>
   close(): Promise<void>
 }
 
@@ -72,6 +103,8 @@ export interface Store {
 export function memoryStore(): Store {
   const creators = new Map<string, CreatorRow>()
   const tips = new Map<string, TipRow>()
+  const verifications = new Map<string, VerificationRow>()
+  const claims: NewClaim[] = []
   let sequence = 0
   const nextId = (): string => `00000000-0000-4000-8000-${String(++sequence).padStart(12, '0')}`
 
@@ -120,12 +153,42 @@ export function memoryStore(): Store {
       return row
     },
 
-    async unclaimedBalance(creatorId) {
-      let total = 0n
-      for (const tip of tips.values()) {
-        if (tip.creatorId === creatorId && tip.status === 'confirmed') total += tip.amount
+    async createVerification(creatorId, token, expiresAt) {
+      const row: VerificationRow = { id: nextId(), creatorId, token, expiresAt, verifiedAt: null, usedAt: null }
+      verifications.set(token, row)
+      return row
+    },
+
+    async verificationByToken(token) {
+      return verifications.get(token) ?? null
+    },
+
+    async markVerified(verificationId, creatorId) {
+      for (const row of verifications.values()) {
+        if (row.id === verificationId) row.verifiedAt ??= new Date()
       }
-      return total
+      for (const [key, creator] of creators) {
+        if (creator.id === creatorId) creators.set(key, { ...creator, isVerified: true })
+      }
+    },
+
+    async useVerification(verificationId) {
+      for (const row of verifications.values()) {
+        if (row.id !== verificationId) continue
+        if (row.usedAt) return false
+        row.usedAt = new Date()
+        return true
+      }
+      return false
+    },
+
+    async creatorById(creatorId) {
+      for (const creator of creators.values()) if (creator.id === creatorId) return creator
+      return null
+    },
+
+    async recordClaim(claim) {
+      claims.push(claim)
     },
 
     async close() {},

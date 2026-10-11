@@ -128,3 +128,40 @@ function decodeEntities(value: string): string {
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
 }
+
+/**
+ * Whether a channel's own page currently shows `needle`.
+ *
+ * This is the ownership proof: only someone who can edit the channel can put a
+ * fresh, random token in its description. The page is fetched by channel ID,
+ * never by handle, so a renamed or re-registered handle cannot stand in for the
+ * channel whose tips are being claimed.
+ */
+export async function channelPageContains(
+  channelId: string,
+  needle: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<boolean> {
+  if (!isValidChannelId(channelId)) return false
+
+  let response: Response
+  try {
+    response = await fetchImpl(`https://www.youtube.com/channel/${channelId}/about`, {
+      signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
+      headers: {
+        'user-agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36',
+        'accept-language': 'en-US,en;q=0.9',
+      },
+    })
+  } catch {
+    throw new ChannelLookupError()
+  }
+  if (!response.ok) throw new ChannelLookupError()
+
+  try {
+    return (await response.text()).includes(needle)
+  } catch {
+    throw new ChannelLookupError()
+  }
+}

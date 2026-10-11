@@ -1,61 +1,51 @@
 /**
  * Configuration, read once and complained about immediately.
  *
- * A backend that starts without its Circle credentials and only discovers it
- * when the first creator needs an escrow wallet has turned a deployment mistake
- * into somebody's failed tip. Anything missing is either fatal at boot or
- * absent by design and named as such.
+ * A backend that starts without its relayer key and only discovers it when the
+ * first gifter tries to tip has turned a deployment mistake into somebody's
+ * failed tip. Anything missing is either fatal at boot or absent by design and
+ * named as such.
  */
-export interface CircleConfig {
-  apiKey: string
-  entitySecret: string
-  walletSetId: string
-  /** Circle's code for Arc's testnet. Arc has no mainnet at Circle yet. */
-  blockchain: string
-}
+import { STELLAR_RPC_URL } from '@tipee/shared'
 
 export interface Config {
   port: number
-  databaseUrl: string
-  /** Null when Circle is not configured — escrow provisioning then fails closed. */
-  circle: CircleConfig | null
+  /** Null runs the in-memory store: fine for a demo, since the chain is the record. */
+  databaseUrl: string | null
+  rpcUrl: string
+  /** Pays every fee, deploys wallets, funds the faucet. Required. */
+  relayerSecret: string
+  /** The escrow's verifier. Null disables claims, and says so. */
+  verifierSecret: string | null
+  /** Where the escrow sends its fee; shown on claim receipts. */
   treasuryAddress: string | null
+  /** Testnet USDC handed to a new wallet, accounting units as a decimal string. */
+  faucetAmount: string
 }
 
 export class ConfigError extends Error {}
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  const databaseUrl = env.DATABASE_URL?.trim()
-  if (!databaseUrl) throw new ConfigError('DATABASE_URL is required.')
-
   const port = Number(env.PORT ?? 3000)
   if (!Number.isInteger(port) || port <= 0) throw new ConfigError('PORT must be a positive integer.')
 
-  const apiKey = env.CIRCLE_API_KEY?.trim()
-  const entitySecret = env.CIRCLE_ENTITY_SECRET?.trim()
-  const walletSetId = env.CIRCLE_WALLET_SET_ID?.trim()
+  const relayerSecret = env.RELAYER_SECRET?.trim()
+  if (!relayerSecret || !/^S[A-Z2-7]{55}$/.test(relayerSecret)) {
+    throw new ConfigError('RELAYER_SECRET is required: the secret key (S…) of the account that pays fees.')
+  }
 
-  // All three or none. Two out of three is a deployment half-done, and it would
-  // fail at the worst moment rather than at boot.
-  const someCircle = Boolean(apiKey || entitySecret || walletSetId)
-  const allCircle = Boolean(apiKey && entitySecret && walletSetId)
-  if (someCircle && !allCircle) {
-    throw new ConfigError(
-      'Circle needs CIRCLE_API_KEY, CIRCLE_ENTITY_SECRET and CIRCLE_WALLET_SET_ID together.',
-    )
+  const verifierSecret = env.VERIFIER_SECRET?.trim() || null
+  if (verifierSecret && !/^S[A-Z2-7]{55}$/.test(verifierSecret)) {
+    throw new ConfigError('VERIFIER_SECRET must be a Stellar secret key (S…).')
   }
 
   return {
     port,
-    databaseUrl,
-    circle: allCircle
-      ? {
-          apiKey: apiKey as string,
-          entitySecret: entitySecret as string,
-          walletSetId: walletSetId as string,
-          blockchain: env.CIRCLE_BLOCKCHAIN?.trim() || 'ARC-TESTNET',
-        }
-      : null,
+    databaseUrl: env.DATABASE_URL?.trim() || null,
+    rpcUrl: env.STELLAR_RPC_URL?.trim() || STELLAR_RPC_URL,
+    relayerSecret,
+    verifierSecret,
     treasuryAddress: env.TREASURY_ADDRESS?.trim() || null,
+    faucetAmount: env.FAUCET_AMOUNT?.trim() || '10',
   }
 }

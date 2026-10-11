@@ -3,22 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Creator resolution, escrow provisioning, and tip records. The only side that talks to Circle.",
+  "description": "Creator resolution, the Stellar relayer, and creator claims. The only side that holds keys.",
   "main": "./src/index.ts",
   "scripts": {
     "dev": "node --experimental-strip-types --watch src/server.ts",
     "start": "node --experimental-strip-types src/server.ts",
     "migrate": "node --experimental-strip-types src/db/migrate.ts",
-    "circle:entity-secret": "node --experimental-strip-types src/scripts/entity-secret.ts",
-    "circle:wallet-set": "node --experimental-strip-types src/scripts/create-wallet-set.ts",
     "typecheck": "tsc --build"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "17.1.0",
     "@tipee/shared": "*",
     "fastify": "^5.2.0",
-    "pg": "^8.13.1",
-    "viem": "^2.21.0"
+    "pg": "^8.13.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",

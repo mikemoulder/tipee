@@ -1,37 +1,47 @@
 import { Pool } from 'pg'
 
+import { parseUsdc } from '@tipee/shared'
+
 import { buildApp } from './app.ts'
-import { arcClient } from './chain.ts'
-import { circleEscrow, unconfiguredEscrow } from './circle.ts'
 import { loadConfig } from './config.ts'
 import { migrate } from './db/migrate.ts'
+import { stellarGateway } from './stellar.ts'
+import { memoryStore } from './store.ts'
 import { postgresStore } from './store.pg.ts'
 
 /**
  * Boot: migrate, wire, listen.
  *
  * Migrations run on start because a schema that lags the code is the failure
- * this API would notice last and explain worst. Without Circle it still starts
- * — resolution then answers 503 with a reason, which is a great deal easier to
- * diagnose than a process that refuses to boot on a laptop with no credentials.
+ * this API would notice last and explain worst. Without a database it runs on
+ * the in-memory store and says so: the chain is the record of every tip and
+ * every balance, so what is lost on a restart is bookkeeping, not money.
  */
 async function main(): Promise<void> {
   const config = loadConfig()
 
-  const pool = new Pool({ connectionString: config.databaseUrl })
-  await migrate(pool)
-  await pool.end()
+  let store = memoryStore()
+  if (config.databaseUrl) {
+    const pool = new Pool({ connectionString: config.databaseUrl })
+    await migrate(pool)
+    await pool.end()
+    store = postgresStore(config.databaseUrl)
+  }
 
   const app = buildApp({
-    store: postgresStore(config.databaseUrl),
-    escrow: config.circle ? circleEscrow(config.circle) : unconfiguredEscrow(),
-    chain: arcClient(),
+    store,
+    stellar: stellarGateway({
+      rpcUrl: config.rpcUrl,
+      relayerSecret: config.relayerSecret,
+      verifierSecret: config.verifierSecret,
+    }),
+    faucetAmount: parseUsdc(config.faucetAmount),
+    treasuryAddress: config.treasuryAddress,
     logger: true,
   })
 
-  if (!config.circle) {
-    app.log.warn('Circle is not configured — creator resolution will answer 503 until it is.')
-  }
+  if (!config.databaseUrl) app.log.warn('DATABASE_URL is not set — using the in-memory store.')
+  if (!config.verifierSecret) app.log.warn('VERIFIER_SECRET is not set — creator claims will be refused.')
 
   await app.listen({ port: config.port, host: '0.0.0.0' })
 }

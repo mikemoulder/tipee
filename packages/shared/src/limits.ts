@@ -62,8 +62,9 @@ export interface TipValidationInput {
   /** Spendable wallet balance. */
   balance: bigint
   /**
-   * Estimated network fee. On Arc this is denominated in USDC like the tip
-   * itself, which is exactly why it must be subtracted rather than ignored.
+   * Network fee the gifter pays, in the same unit. Zero on Stellar, where the
+   * relayer pays it; still checked, so a chain that charges fees in the asset
+   * being sent cannot slip a doomed transaction past this function.
    */
   gasCost: bigint
   /** Minimum acceptable tip, in the same unit as the values above. */
@@ -73,8 +74,8 @@ export interface TipValidationInput {
 /**
  * Validates a tip against the wallet's ability to actually send it.
  *
- * The case worth naming: on Arc, gas is paid in USDC, so a wallet holding
- * exactly the tip amount cannot send that tip — the fee has nowhere to come
+ * The case worth naming: where gas is paid in USDC (as it was on Arc), a
+ * wallet holding exactly the tip amount cannot send that tip — the fee has nowhere to come
  * from. Checking `amount <= balance` alone passes that transaction straight
  * through to an on-chain revert, which costs the user gas and tells them
  * nothing useful.
@@ -147,8 +148,9 @@ export function maxTippable(balance: bigint, gasCost: bigint, minimum: bigint): 
 /**
  * How much memo a tip may carry, in bytes.
  *
- * Bytes, not characters. A memo rides along in transaction calldata, where the
- * unit of cost — and of any downstream length check — is the byte: an emoji is
+ * Bytes, not characters. A memo rides in the escrow's `tip` event, and the
+ * escrow contract checks its length in bytes (`NOTE_MAX_BYTES`, the same 120),
+ * so the unit of cost and of every length check is the byte: an emoji is
  * four of them and a CJK character three. Counting characters would let a
  * "120-character" memo weigh 480 bytes and blow whatever budget the caller set.
  */

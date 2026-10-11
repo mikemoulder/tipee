@@ -32,13 +32,23 @@ export {
 } from './limits.ts'
 
 export {
-  ARC_MEMO_ADDRESS,
-  ARC_MEMO_ABI,
-  memoIdFromNonce,
-  nonceFromMemoId,
-  encodeMemoData,
-  decodeMemoData,
-} from './arc.ts'
+  STELLAR_NETWORK_PASSPHRASE,
+  STELLAR_RPC_URL,
+  STELLAR_EXPLORER,
+  STELLAR_USDC_DECIMALS,
+  USDC_ASSET_CODE,
+  USDC_ISSUER,
+  USDC_CONTRACT_ID,
+  ESCROW_CONTRACT_ID,
+  WALLET_WASM_HASH,
+  RELAYER_ADDRESS,
+  toStroops,
+  fromStroops,
+  isStellarAddress,
+  isContractAddress,
+  explorerTxUrl,
+  explorerAccountUrl,
+} from './stellar.ts'
 
 export {
   isValidChannelId,
@@ -61,8 +71,14 @@ export type {
   VerifyInitResponse,
   VerifyConfirmRequest,
   VerifyConfirmResponse,
-  WithdrawRequest,
-  WithdrawResponse,
+  ClaimRequest,
+  ClaimResponse,
+  CreateWalletRequest,
+  CreateWalletResponse,
+  FaucetRequest,
+  FaucetResponse,
+  RelayRequest,
+  RelayResponse,
   ApiError,
   ExtensionMessage,
 } from './types.ts'

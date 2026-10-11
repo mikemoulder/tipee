@@ -24,17 +24,20 @@ export interface ScrapedCreator {
  *
  * The backend — not the extension — establishes `channel_id`, by fetching the
  * channel page server-side. A client-supplied channel ID could be forged to
- * point a tip at someone else's escrow wallet.
+ * point a tip at someone else's balance in the escrow.
  */
 export interface ResolveCreatorResponse {
   channel_id: string
   handle: string
   display_name: string
   avatar_url: string | null
-  /** Escrow address that receives tips for this channel. */
-  wallet_address: string
+  /**
+   * The escrow contract tips are paid into, keyed by `channel_id`. The same
+   * contract for every creator; the extension refuses any other.
+   */
+  escrow_contract: string
   is_verified: boolean
-  /** Decimal string, accounting units. */
+  /** Decimal string, accounting units. Read from the escrow contract. */
   unclaimed_balance: string
 }
 
@@ -85,22 +88,76 @@ export interface VerifyConfirmRequest {
 
 export interface VerifyConfirmResponse {
   verified: boolean
-  wallet_address: string
+  channel_id: string
 }
 
-/** `POST /api/creators/withdraw` */
-export interface WithdrawRequest {
+/**
+ * `POST /api/creators/claim`
+ *
+ * Pays a verified channel's whole escrow balance to any Stellar address. The
+ * escrow contract takes the fee; the API only authorises the claim with the
+ * verifier key, once the token proves ownership.
+ */
+export interface ClaimRequest {
+  token: string
   destination_address: string
-  /** Decimal string, accounting units. */
-  amount: string
 }
 
-export interface WithdrawResponse {
-  withdrawal_id: string
+export interface ClaimResponse {
+  tx_hash: string
   amount_gross: string
   platform_fee: string
   amount_net: string
-  status: WithdrawalStatus
+}
+
+/**
+ * `POST /api/wallets`
+ *
+ * Deploys the gifter's wallet contract, owned by `owner`, if it is not already
+ * there. The address is deterministic (deployer + `sha256(owner)`), so the
+ * extension computes it offline and checks the answer rather than trusting it.
+ */
+export interface CreateWalletRequest {
+  /** The ed25519 owner key as a `G…` StrKey. Public, never the seed. */
+  owner: string
+}
+
+export interface CreateWalletResponse {
+  wallet_address: string
+  /** False when the wallet already existed. */
+  deployed: boolean
+  tx_hash: string | null
+}
+
+/** `POST /api/faucet`: testnet USDC for a new wallet, once. */
+export interface FaucetRequest {
+  wallet_address: string
+}
+
+export interface FaucetResponse {
+  /** Decimal string, accounting units. */
+  amount: string
+  tx_hash: string
+}
+
+/**
+ * `POST /api/relay`
+ *
+ * A Soroban invocation the gifter's wallet has already authorised. The relayer
+ * becomes the transaction source and pays the fee; it cannot change what was
+ * signed, because the signature covers the invocation tree. It refuses anything
+ * that is not a tip, a USDC transfer out of a Tipee wallet, or a wallet's own
+ * session change.
+ */
+export interface RelayRequest {
+  /** `xdr.HostFunction`, base64. */
+  func: string
+  /** Signed `xdr.SorobanAuthorizationEntry` values, base64. */
+  auth: string[]
+}
+
+export interface RelayResponse {
+  tx_hash: string
 }
 
 export interface ApiError {
@@ -114,9 +171,13 @@ export interface ComposerContext {
   walletAddress: string | null
   /** Spendable USDC, accounting units. Null when it could not be read. */
   balance: string | null
-  /** Estimated fee for *this* tip, accounting units. Null when unknown. */
+  /**
+   * What the gifter pays in fees, accounting units. Always `0.00` on Stellar,
+   * because the relayer pays; kept as a field so the composer's validation
+   * did not have to learn a second shape.
+   */
   gasCost: string | null
-  /** Escrow wallet the tip would be paid into. */
+  /** The escrow contract the tip would be paid into. */
   recipient: string | null
   /** Why the above is incomplete. Terse, safe to show as-is. */
   problem: string | null
@@ -139,19 +200,17 @@ export type SendTipOutcome =
 export type ExtensionMessage =
   | { type: 'OPEN_COMPOSER'; creator: ScrapedCreator; screenX: number; screenY: number }
   /**
-   * Asks the worker what this tip would actually cost. `amount` and `memo` are
-   * both part of the question: the memo decides whether the transaction is a
-   * bare transfer or a `Memo`-wrapped one, and the wrapper's gas comes out of
-   * the same USDC balance as the tip.
+   * Asks the worker what this tip would actually cost, and whether it would go
+   * through: the worker simulates the real `escrow.tip` call.
    */
   | { type: 'GET_COMPOSER_CONTEXT'; nonce: string; amount: string; memo: string }
   | { type: 'GET_WALLET_STATE' }
   /**
    * Optional note, empty string when absent.
    *
-   * It reaches the chain through Arc's predeployed `Memo` contract, which wraps
-   * the USDC transfer and emits the note as an indexed event (see `./arc`). So
-   * it is *public and permanent*: readable by anyone, editable by no one, and
-   * paid for by the byte — hence the cap in `MEMO_MAX_BYTES`.
+   * It reaches the chain as the `note` of the escrow's `tip` event, in the same
+   * call that moves the USDC. So it is *public and permanent*: readable by
+   * anyone, editable by no one — hence the cap in `MEMO_MAX_BYTES`, which the
+   * escrow contract enforces too.
    */
   | { type: 'SEND_TIP'; nonce: string; amount: string; pin: string; memo: string }

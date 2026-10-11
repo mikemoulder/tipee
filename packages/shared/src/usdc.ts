@@ -11,9 +11,10 @@
  * `decimal(20, 6)` columns in Postgres, and the decimal strings we put on the
  * wire.
  *
- * On-chain units may differ — if Arc's native token uses 18 decimals, the
- * chain layer scales with `scaleUnits` at the boundary. Accounting stays at 6
- * regardless, so the chain's quirks never leak into the fee math.
+ * On-chain units differ: USDC on Stellar has 7 decimals, and the chain layer
+ * scales with `toStroops` / `fromStroops` (see `./stellar.ts`) at the boundary.
+ * Accounting stays at 6 regardless, so the chain's quirks never leak into the
+ * fee math.
  */
 
 export const USDC_DECIMALS = 6
