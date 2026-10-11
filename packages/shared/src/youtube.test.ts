@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { isValidChannelId, normalizeHandle, parseChannelRef } from './youtube'
+import { isValidChannelId, normalizeHandle, parseChannelRef } from './youtube.ts'
 
 /** Real channel IDs, used so the 24-character shape is never accidentally loosened. */
 const GOOGLE_DEVS = 'UC_x5XG1OV2P6uZZ5FSM9Ttw'

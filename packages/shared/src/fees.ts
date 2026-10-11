@@ -16,7 +16,7 @@
  * direction for a rounding error to point.
  */
 
-import { formatUsdc } from './usdc'
+import { formatUsdc } from './usdc.ts'
 
 /** 4%, in basis points. */
 export const PLATFORM_FEE_BPS = 400n

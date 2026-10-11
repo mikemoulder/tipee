@@ -10,7 +10,7 @@ import {
 import { mnemonicToAccount } from 'viem/accounts'
 
 import { arcPublicClient, arcWalletClient, usdcBalance } from '../chain/arc'
-import { EscrowUnavailableError, resolveEscrowAddress } from '../chain/creators'
+import { EscrowUnavailableError, reportTip, resolveCreator } from '../chain/creators'
 import { recordTip } from '../chain/journal'
 import { buildTipCall } from '../chain/tip'
 import { WalletLockedError, WalletWipedError, getWalletAddress } from '../wallet/keystore'
@@ -102,7 +102,7 @@ async function composerContext(amount: string, memo: string): Promise<ComposerCo
 
   if (pendingCreator) {
     try {
-      context.recipient = await resolveEscrowAddress(pendingCreator.handle)
+      context.recipient = (await resolveCreator(pendingCreator.handle)).escrowAddress
     } catch (error) {
       context.problem = error instanceof EscrowUnavailableError ? error.message : 'Could not find this creator.'
     }
@@ -163,9 +163,9 @@ async function sendTip(message: Extract<ExtensionMessage, { type: 'SEND_TIP' }>)
     return { ok: false, message: 'This tip has lost track of its creator. Close and try again.' }
   }
 
-  let recipient: `0x${string}`
+  let creator: Awaited<ReturnType<typeof resolveCreator>>
   try {
-    recipient = await resolveEscrowAddress(pendingCreator.handle)
+    creator = await resolveCreator(pendingCreator.handle)
   } catch (error) {
     return { ok: false, message: error instanceof EscrowUnavailableError ? error.message : 'Could not find this creator.' }
   }
@@ -183,6 +183,7 @@ async function sendTip(message: Extract<ExtensionMessage, { type: 'SEND_TIP' }>)
 
   try {
     const account = mnemonicToAccount(mnemonic)
+    const recipient = creator.escrowAddress
     const call = buildTipCall({ recipient, amount, memo: message.memo, nonce: message.nonce })
 
     // Re-checked here rather than trusted from the composer: the estimate there
@@ -213,6 +214,10 @@ async function sendTip(message: Extract<ExtensionMessage, { type: 'SEND_TIP' }>)
       amount: amount.toString(),
       at: Date.now(),
     })
+
+    // And tell the backend, without making the gifter wait for it or see it
+    // fail — the tip is already on Arc either way.
+    void reportTip({ channelId: creator.channelId, gifterAddress: account.address, amount, txHash })
 
     return { ok: true, txHash }
   } catch (error) {

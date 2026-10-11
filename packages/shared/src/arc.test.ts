@@ -7,8 +7,8 @@ import {
   encodeMemoData,
   memoIdFromNonce,
   nonceFromMemoId,
-} from './arc'
-import { MEMO_MAX_BYTES, fitMemo, memoByteLength } from './limits'
+} from './arc.ts'
+import { MEMO_MAX_BYTES, fitMemo, memoByteLength } from './limits.ts'
 
 const NONCE = '3f2504e0-4f89-11d3-9a0c-0305e82c3301'
 

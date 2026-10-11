@@ -18,7 +18,7 @@
  * through. Use `minTipInUnits(decimals)` to lift the minimum into chain units.
  */
 
-import { ONE_USDC, USDC_DECIMALS, scaleUnits } from './usdc'
+import { ONE_USDC, USDC_DECIMALS, scaleUnits } from './usdc.ts'
 
 /** 0.50 USDC, in accounting units (idea.md §9). */
 export const MIN_TIP = ONE_USDC / 2n

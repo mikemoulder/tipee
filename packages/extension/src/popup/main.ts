@@ -3,6 +3,7 @@ import { formatUsdc, tryParseUsdc } from '@tipee/shared'
 import './styles.css'
 import { ARC_LOGO, arcBadge, arcMark } from '../brand/arc-mark'
 import { ActivityUnavailableError, walletActivity, type ActivityReport, type Movement } from '../chain/activity'
+import { apiBase, setApiBase } from '../chain/creators'
 import { tipLabels, type TipRecord } from '../chain/journal'
 import { ARC_BLOCK_SECONDS, arcPublicClient, arcWalletClient, usdcBalance } from '../chain/arc'
 import { ARC_EXPLORER } from '../chain/explorer'
@@ -846,6 +847,13 @@ function renderSettings(address: `0x${string}`): void {
       <p class="section-label">Wallet address</p>
       <p class="address">${escapeHtml(address)}</p>
 
+      <p class="section-label">Tipee service</p>
+      <p class="muted-line">Where creator escrow wallets are looked up. Without it, tips have nowhere to go.</p>
+      <div class="field-row">
+        <input id="api-base" type="text" autocomplete="off" spellcheck="false" placeholder="https://…" />
+        <button class="ghost" id="save-api" type="button"><span>Save</span></button>
+      </div>
+
       <p class="section-label">Ask for the PIN</p>
       <div class="choices" id="policy"></div>
       <button class="ghost" id="lock-now" type="button"><span>Lock wallet now</span></button>
@@ -864,6 +872,24 @@ function renderSettings(address: `0x${string}`): void {
   document.querySelector('#lock-now')?.addEventListener('click', () => void lock().then(() => renderLocked(address)))
 
   void renderPolicyChoices()
+  void fillApiBase()
+
+  document.querySelector('#save-api')?.addEventListener('click', () => {
+    const field = document.querySelector<HTMLInputElement>('#api-base')
+    const label = document.querySelector<HTMLElement>('#save-api span')
+    if (!field) return
+
+    void setApiBase(field.value).then(() => {
+      if (!label) return
+      label.textContent = 'Saved'
+      window.setTimeout(() => (label.textContent = 'Save'), 1_500)
+    })
+  })
+}
+
+async function fillApiBase(): Promise<void> {
+  const field = document.querySelector<HTMLInputElement>('#api-base')
+  if (field) field.value = (await apiBase()) ?? ''
 }
 
 /** The unlock rule, as three plain statements of what the wallet will do. */

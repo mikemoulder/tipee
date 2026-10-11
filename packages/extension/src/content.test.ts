@@ -2,6 +2,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const BUTTON_ID = 'tipee-tip-button'
+const TOOLTIP_ID = 'tipee-tip-tooltip'
 
 const sendMessage = vi.fn()
 
@@ -186,6 +187,57 @@ describe('tip button injection', () => {
     expect(sendMessage.mock.calls[0]?.[0]?.creator?.avatarUrl).toBe(
       'https://yt3.ggpht.com/abc=s48-c-k-c0x00ffffff-no-rj',
     )
+  })
+
+  it('says so when the runtime is gone instead of failing silently', async () => {
+    watchVideo('iiiiiiiiiii')
+    renderWatchPage()
+    await settle()
+
+    // How a reloaded or updated extension leaves every content script already
+    // running in an open tab. `sendMessage` throws *synchronously* here, which
+    // a bare `void` never caught — the click handler died and the button just
+    // looked broken. Only a page reload recovers it, so it has to be asked for.
+    sendMessage.mockImplementationOnce(() => {
+      throw new Error('Extension context invalidated.')
+    })
+    document.getElementById(BUTTON_ID)?.click()
+    await settle()
+
+    const tooltip = document.getElementById(TOOLTIP_ID)
+    expect(tooltip?.textContent).toContain('Reload this page')
+    expect(document.getElementById(BUTTON_ID)?.title).toBe('Reload this page to tip')
+  })
+
+  it('recovers from a worker that could not be reached', async () => {
+    watchVideo('jjjjjjjjjjj')
+    renderWatchPage()
+    await settle()
+
+    // The asynchronous half of the same hole: a rejected promise, which `void`
+    // turned into an unhandled rejection in a console no gifter is reading.
+    sendMessage.mockImplementationOnce(() =>
+      Promise.reject(new Error('Could not establish connection.')),
+    )
+    document.getElementById(BUTTON_ID)?.click()
+    await settle()
+
+    expect(document.getElementById(TOOLTIP_ID)?.textContent).toContain('Try again')
+    // A sleeping worker wakes on the retry, so the button keeps its usual label.
+    expect(document.getElementById(BUTTON_ID)?.title).toBe('Tip this creator')
+  })
+
+  it('leaves no message behind when the composer opens', async () => {
+    watchVideo('kkkkkkkkkkk')
+    renderWatchPage()
+    await settle()
+
+    sendMessage.mockClear()
+    document.getElementById(BUTTON_ID)?.click()
+    await settle()
+
+    expect(sendMessage).toHaveBeenCalledTimes(1)
+    expect(document.getElementById(TOOLTIP_ID)).toBeNull()
   })
 
   it('stays off pages that are not a watch page', async () => {

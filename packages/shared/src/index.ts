@@ -7,7 +7,7 @@ export {
   formatUsdc,
   scaleUnits,
   type FormatUsdcOptions,
-} from './usdc'
+} from './usdc.ts'
 
 export {
   PLATFORM_FEE_BPS,
@@ -15,7 +15,7 @@ export {
   splitWithdrawal,
   formatWithdrawalSplit,
   type WithdrawalSplit,
-} from './fees'
+} from './fees.ts'
 
 export {
   MIN_TIP,
@@ -29,7 +29,7 @@ export {
   type TipRejectionReason,
   type TipValidation,
   type TipValidationInput,
-} from './limits'
+} from './limits.ts'
 
 export {
   ARC_MEMO_ADDRESS,
@@ -38,14 +38,14 @@ export {
   nonceFromMemoId,
   encodeMemoData,
   decodeMemoData,
-} from './arc'
+} from './arc.ts'
 
 export {
   isValidChannelId,
   normalizeHandle,
   parseChannelRef,
   type ChannelRef,
-} from './youtube'
+} from './youtube.ts'
 
 export type {
   ScrapedCreator,
@@ -65,4 +65,4 @@ export type {
   WithdrawResponse,
   ApiError,
   ExtensionMessage,
-} from './types'
+} from './types.ts'

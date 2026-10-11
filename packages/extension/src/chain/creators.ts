@@ -1,4 +1,4 @@
-import type { ResolveCreatorResponse } from '@tipee/shared'
+import { formatUsdc, isValidChannelId, type RecordTipRequest, type ResolveCreatorResponse } from '@tipee/shared'
 import { isAddress } from 'viem'
 
 /** Where the backend lives. Absent until someone configures one. */
@@ -20,10 +20,22 @@ export class EscrowUnavailableError extends Error {
   }
 }
 
-async function apiBase(): Promise<string | null> {
+export async function apiBase(): Promise<string | null> {
   const stored = await chrome.storage.local.get(API_BASE_KEY)
   const base = stored[API_BASE_KEY]
   return typeof base === 'string' && base !== '' ? base.replace(/\/+$/, '') : null
+}
+
+/** Where Tipee's service lives. Settable, because it moves between local work and a deployment. */
+export async function setApiBase(base: string): Promise<void> {
+  await chrome.storage.local.set({ [API_BASE_KEY]: base.trim().replace(/\/+$/, '') })
+}
+
+/** The creator behind a handle, as the backend establishes them. */
+export interface ResolvedCreator {
+  channelId: string
+  escrowAddress: `0x${string}`
+  displayName: string
 }
 
 /**
@@ -34,7 +46,7 @@ async function apiBase(): Promise<string | null> {
  * be forged to point a tip at somebody else's escrow (idea.md §8). All this
  * side does is refuse anything that does not come back as a real address.
  */
-export async function resolveEscrowAddress(handle: string): Promise<`0x${string}`> {
+export async function resolveCreator(handle: string): Promise<ResolvedCreator> {
   const base = await apiBase()
   if (!base) {
     throw new EscrowUnavailableError('Tipee is not connected to a backend yet.')
@@ -58,10 +70,57 @@ export async function resolveEscrowAddress(handle: string): Promise<`0x${string}
     throw new EscrowUnavailableError('Tipee sent back something unreadable.')
   }
 
-  const address = (body as Partial<ResolveCreatorResponse> | null)?.wallet_address
-  if (typeof address !== 'string' || !isAddress(address)) {
+  const resolved = body as Partial<ResolveCreatorResponse> | null
+  const address = resolved?.wallet_address
+
+  // Shape only, not checksum: Circle returns lowercase addresses, and a
+  // checksum rule here would reject every escrow it ever created.
+  if (typeof address !== 'string' || !isAddress(address, { strict: false })) {
     throw new EscrowUnavailableError('Tipee sent back an invalid escrow address.')
   }
+  if (!isValidChannelId(resolved?.channel_id)) {
+    throw new EscrowUnavailableError('Tipee sent back an unusable creator.')
+  }
 
-  return address as `0x${string}`
+  return {
+    channelId: resolved.channel_id as string,
+    escrowAddress: address as `0x${string}`,
+    displayName: typeof resolved?.display_name === 'string' ? resolved.display_name : handle,
+  }
+}
+
+/**
+ * Tells the backend a tip happened, once it has.
+ *
+ * Best effort on purpose. The transaction is already on Arc, which is the
+ * record that decides what a creator is owed; this call only lets the backend
+ * notice it sooner than a scan would. The backend re-reads the transaction
+ * before believing any of it, so nothing here can inflate a balance — and a
+ * failure must never turn a successful tip into an error on screen.
+ */
+export async function reportTip(tip: {
+  channelId: string
+  gifterAddress: `0x${string}`
+  amount: bigint
+  txHash: `0x${string}`
+}): Promise<void> {
+  const base = await apiBase()
+  if (!base) return
+
+  const body: RecordTipRequest = {
+    gifter_address: tip.gifterAddress,
+    creator_channel_id: tip.channelId,
+    amount: formatUsdc(tip.amount),
+    tx_hash: tip.txHash,
+  }
+
+  try {
+    await fetch(`${base}/api/tips`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  } catch {
+    // The chain has it. Nothing to tell the gifter.
+  }
 }

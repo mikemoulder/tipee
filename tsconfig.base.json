@@ -13,6 +13,10 @@
     "moduleDetection": "force",
     "resolveJsonModule": true,
     "isolatedModules": true,
+    // Node resolves imports by filename, so source that Node runs directly
+    // spells out `.ts`; TypeScript rewrites it on emit.
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
     "verbatimModuleSyntax": true,
 
     "strict": true,
