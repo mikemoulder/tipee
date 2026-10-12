@@ -630,3 +630,35 @@
     }
   }
 }
+
+/* ── Tipee: the hero scene ──────────────────────────────────────────────
+   Depth comes from translateZ on each layer inside one tilted rig; the rig
+   follows the pointer (hero-scene.tsx sets --rx / --ry) and eases back. The
+   drifts sit on inner wrappers so they never fight the depth transform. */
+.hero-scene {
+  perspective: 1400px;
+}
+.hero-rig {
+  --rx: 3deg;
+  --ry: -6deg;
+  transform-style: preserve-3d;
+  transform: rotateX(var(--rx)) rotateY(var(--ry));
+  transition: transform 600ms var(--motion-out);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .drift-a { animation: drift 7s ease-in-out infinite; }
+  .drift-b { animation: drift 6s ease-in-out -2s infinite; }
+  .drift-c { animation: drift 8s ease-in-out -4s infinite; }
+  @keyframes drift {
+    50% { transform: translate3d(0, -8px, 0); }
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .toast-in { animation: toast-in 600ms var(--motion-out) both; }
+  @keyframes toast-in {
+    from { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.97); }
+  }
+}
+@media (prefers-reduced-motion: reduce), (max-width: 640px) {
+  .hero-rig { --rx: 0deg; --ry: 0deg; }
+}

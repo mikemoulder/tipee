@@ -22,11 +22,8 @@ export function GiftGlyph({ className, strokeWidth = 1.6 }: { className?: string
 
 export function Wordmark({ className }: { className?: string }) {
   return (
-    <Link href="/" className={cx('inline-flex items-center gap-2 text-fg no-underline', className)} aria-label="Tipee home">
-      <span className="grid h-8 w-8 place-items-center rounded-full bg-accent-soft text-on-accent-soft">
-        <GiftGlyph className="h-[18px] w-[18px]" strokeWidth={1.8} />
-      </span>
-      <span className="text-[21px] font-semibold tracking-[-0.03em]">tipee</span>
+    <Link href="/" className={cx('inline-flex items-center text-fg no-underline', className)} aria-label="Tipee home">
+      <span className="text-[22px] font-semibold tracking-[-0.03em]">tipee</span>
     </Link>
   )
 }

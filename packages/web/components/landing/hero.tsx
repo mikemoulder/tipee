@@ -1,5 +1,5 @@
 import { ArrowLink, Button, Container, Eyebrow } from '../primitives'
-import { TipStage } from './tip-stage'
+import { HeroScene } from './hero-scene'
 
 export function Hero() {
   return (
@@ -22,7 +22,7 @@ export function Hero() {
           </div>
           <p className="mt-8 font-mono text-[12.5px] text-fg-mute">Free to send · creators keep 96%</p>
         </div>
-        <TipStage className="lg:col-span-6" />
+        <HeroScene className="lg:col-span-6" />
       </Container>
     </section>
   )

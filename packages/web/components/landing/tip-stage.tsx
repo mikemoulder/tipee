@@ -262,7 +262,8 @@ function Ledger({
   )
 }
 
-function useCountTo(target: number) {
+/** Eases a number to its new value; shared by the hero scene. */
+export function useCountTo(target: number) {
   const [value, setValue] = useState(target)
   const from = useRef(target)
   useEffect(() => {
