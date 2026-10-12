@@ -231,7 +231,7 @@ async function loadBalance(address: string): Promise<void> {
     // someone off to top up money they already have.
     value.innerHTML = '$<span class="pending">—</span>'
     if (note) {
-      note.textContent = 'Stellar did not answer — balance unknown.'
+      note.textContent = 'Couldn’t load your balance. Try again in a moment.'
       note.classList.add('note-warn')
     }
   }
@@ -247,7 +247,8 @@ async function loadActivity(address: string): Promise<void> {
       walletActivity(address),
       tipLabels(),
     ])
-    if (covered) covered.textContent = coverageNote(report)
+    // The scan window (coverageNote) is a detail; only say so when the list may be incomplete.
+    if (covered) covered.textContent = report.partial ? 'Older activity may be missing' : ''
 
     if (report.movements.length === 0) {
       list.innerHTML = emptyState(ICON.clock, 'Nothing yet', 'Tips you send show up here, newest first.')
@@ -268,7 +269,7 @@ async function loadActivity(address: string): Promise<void> {
     if (covered) covered.textContent = ''
     list.innerHTML = emptyState(
       ICON.alert,
-      error instanceof ActivityUnavailableError ? 'Could not reach Stellar' : 'Activity unavailable',
+      error instanceof ActivityUnavailableError ? 'Couldn’t load activity' : 'Activity unavailable',
       'The network did not answer. Your balance and wallet are unaffected.',
       true,
     )
@@ -400,7 +401,7 @@ function renderDeposit(address: string): void {
 
     <section class="deposit">
       <div class="qr-frame" id="qr"></div>
-      <p class="warn">Only send <strong>USDC on Stellar testnet</strong> to this address. It is a contract address (C…): no trustline needed, but some exchanges cannot send to one yet.</p>
+      <p class="warn">Only send <strong>USDC on Stellar testnet</strong> to this address. Some exchanges can’t send to it yet.</p>
 
       <div class="asset-card">
         <div class="asset-head">
@@ -572,9 +573,9 @@ export function validateSendDraft(
 ): { ok: true; to: string; amount: bigint } | { ok: false; message: string } {
   const to = draft.to.trim()
   if (to === '') return { ok: false, message: 'Enter the address to send to.' }
-  if (/^0x/i.test(to)) return { ok: false, message: 'That is an EVM address. Tipee sends on Stellar: G… or C….' }
+  if (/^0x/i.test(to)) return { ok: false, message: 'That’s an Ethereum-style address. Tipee sends on Stellar: G… or C….' }
   if (!isValidDestination(to)) {
-    return { ok: false, message: 'That is not a valid Stellar address — check for a typo.' }
+    return { ok: false, message: 'That isn’t a valid Stellar address. Check for a typo.' }
   }
 
   const amount = tryParseUsdc(draft.amount)
@@ -604,7 +605,7 @@ function renderSendReview(
         <div class="movement skeleton" aria-hidden="true"></div>
         <div class="movement skeleton" aria-hidden="true"></div>
       </div>
-      <p class="sim" id="sim"><span class="sim-icon">${ICON.clock}</span>Running this transfer against Stellar…</p>
+      <p class="sim" id="sim"><span class="sim-icon">${ICON.clock}</span>Checking this transfer…</p>
     </section>
     <div class="bracket"><button class="primary" id="confirm" type="button" disabled>Confirm</button></div>
   `
@@ -629,7 +630,7 @@ async function loadPreview(
     if (summary) summary.innerHTML = summaryRows(preview)
     if (sim) {
       sim.classList.add('ok')
-      sim.innerHTML = `<span class="sim-icon">${ICON.check}</span>Checked on Stellar against live state — this transfer succeeds. Re-checked when you confirm.`
+      sim.innerHTML = `<span class="sim-icon">${ICON.check}</span>Checked. This transfer will go through.`
     }
     if (confirm) {
       confirm.disabled = false
@@ -803,7 +804,7 @@ function renderSendResult(address: string, preview: SendPreview, txHash: string)
         <span class="state-icon ok">${ICON.check}</span>
         <p class="state-title">${escapeHtml(formatUsdc(preview.amount))} USDC sent</p>
         <p class="state-detail">to ${escapeHtml(shorten(preview.to))}</p>
-        <a class="ghost" id="receipt" target="_blank" rel="noreferrer noopener"><span>View on Stellar Expert</span></a>
+        <a class="ghost" id="receipt" target="_blank" rel="noreferrer noopener"><span>See the receipt</span></a>
       </div>
     </section>
     <div class="bracket"><button class="primary" id="done" type="button">Done</button></div>
@@ -839,12 +840,14 @@ function renderSettings(address: string): void {
       <p class="section-label">Wallet address</p>
       <p class="address">${escapeHtml(address)}</p>
 
-      <p class="section-label">Tipee service</p>
-      <p class="muted-line">Where creator escrow wallets are looked up. Without it, tips have nowhere to go.</p>
-      <div class="field-row">
-        <input id="api-base" type="text" autocomplete="off" spellcheck="false" placeholder="https://…" />
-        <button class="ghost" id="save-api" type="button"><span>Save</span></button>
-      </div>
+      <details class="advanced">
+        <summary class="section-label">Advanced</summary>
+        <p class="muted-line">The Tipee server this wallet talks to. Leave it alone unless you run your own.</p>
+        <div class="field-row">
+          <input id="api-base" type="text" autocomplete="off" spellcheck="false" placeholder="https://…" />
+          <button class="ghost" id="save-api" type="button"><span>Save</span></button>
+        </div>
+      </details>
 
       <p class="section-label">Ask for the PIN</p>
       <div class="choices" id="policy"></div>
@@ -930,7 +933,7 @@ async function revealPhrase(address: string): Promise<void> {
     ${backBar('Recovery phrase')}
     <section class="form">
       ${seedGrid(mnemonic)}
-      <p class="warn">Write these down offline. Screenshots and password managers both end up somewhere you did not choose.</p>
+      <p class="warn">Write these down on paper. Anyone who has them can spend your money.</p>
       <div class="bracket"><button class="primary" id="done" type="button">Done</button></div>
     </section>
   `
@@ -958,7 +961,7 @@ function renderWelcome(): void {
       <p class="holding-value">$0.00</p>
     </section>
     <section class="form">
-      <p class="muted-line">Tipee keeps a wallet in this browser, encrypted with a PIN. The keys never leave it.</p>
+      <p class="muted-line">Your wallet lives in this browser, locked with a PIN. Nobody else holds the keys.</p>
       <div class="bracket"><button class="primary" id="setup-wallet" type="button">Set up wallet</button></div>
     </section>
   `
@@ -1101,7 +1104,7 @@ function renderWalletSetup(address: string, mnemonic: string): void {
       <div class="state">
         <span class="state-icon">${ICON.clock}</span>
         <p class="state-title" id="setup-title">Setting up your wallet</p>
-        <p class="state-detail" id="setup-detail">Deploying your wallet contract on Stellar. No XLM, no fees — Tipee covers them.</p>
+        <p class="state-detail" id="setup-detail">This takes about ten seconds. Tipee pays the fees.</p>
       </div>
       <p class="error" id="setup-error"></p>
       <div class="bracket"><button class="primary" id="setup-retry" type="button" hidden>Try again</button></div>
@@ -1121,7 +1124,7 @@ function renderWalletSetup(address: string, mnemonic: string): void {
     try {
       await deployWallet(keypairFromMnemonic(mnemonic))
       if (title) title.textContent = 'Getting you test USDC'
-      if (detail) detail.textContent = 'Real Circle USDC on Stellar testnet, straight to your wallet.'
+      if (detail) detail.textContent = 'Ten test dollars to tip with.'
       try {
         await requestFaucet(address)
       } catch {
@@ -1186,7 +1189,7 @@ export function seedWordsMatch(
 
 /** Unlock failures, translated without echoing anything about the PIN itself. */
 export function unlockMessage(error: unknown): string {
-  if (error instanceof WalletWipedError) return 'Too many wrong PINs — this wallet has been erased.'
+  if (error instanceof WalletWipedError) return 'Too many wrong PINs. This wallet has been erased.'
   if (error instanceof WalletLockedError) {
     return `Too many attempts. Try again in ${Math.ceil(error.retryAfterMs / 1000)}s.`
   }

@@ -310,7 +310,7 @@ function showOutcome(outcome: SendTipOutcome, amount: string, memo: string): voi
   if (outcome.ok) {
     footer.innerHTML = `
       <p class="signing-summary sent">Sent ${escapeHtml(amount)} USDC</p>
-      <a class="link" id="receipt" target="_blank" rel="noreferrer noopener">View on Stellar Expert</a>
+      <a class="link" id="receipt" target="_blank" rel="noreferrer noopener">See the receipt</a>
       <div class="bracket"><button class="primary" id="done" type="button">Close</button></div>
     `
     // Set as a property, so a hash from outside this window is never markup.

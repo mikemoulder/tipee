@@ -231,7 +231,7 @@ function isTransparent(color: string): boolean {
 /** The idle nudge. Suppressed once a tip has gone out, and never over a live panel. */
 function showTooltip(): void {
   if (document.getElementById(TOOLTIP_ID) || localStorage.getItem('tipee-tip-sent') === '1') return
-  showMessage('Enjoying the video? Tip the creator — it goes straight to them.')
+  showMessage('Enjoying the video? Send the creator a tip.')
 }
 
 /**

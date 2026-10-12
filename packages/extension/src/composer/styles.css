@@ -1,17 +1,14 @@
 /*
- * The tip composer, in the Talise design language (talise.io).
- *
- * Two traits carry it: monospace does almost all the work, with a grotesque
- * kept for display lines only; and the surface is pale sage rather than white,
- * so the white cards sitting on it read as raised without needing a shadow.
- * `TWK Everett` is a licensed face, so this uses Hanken Grotesk — the fallback
- * Talise's own stack names next — which is on Google Fonts.
+ * The tip composer, in the website's language (packages/web/DESIGN.md): sage
+ * ground, white rounded fields, Hanken Grotesk for words and JetBrains Mono for
+ * amounts and labels, pill controls. The send button is forest because forest
+ * means money going to a creator, on the site and here.
  */
 
 @import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 :root {
-  --sage: #ecefe8;
+  --sage: #f3f5ef;
   --card: #ffffff;
   --tint: #f5f7f2;
   --rule: #e2e6dd;
@@ -19,7 +16,7 @@
   --mint: #caffb8;
   --ink: #121a0f;
   --muted: #55634e;
-  --faint: #8b9784;
+  --faint: #7f8b78;
   --on-forest: #f2f4f2;
   --danger: #9a3412;
 
@@ -28,7 +25,7 @@
 
   color: var(--ink);
   background: var(--sage);
-  font-family: var(--mono);
+  font-family: var(--display);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -44,28 +41,13 @@ main {
   padding: 18px 20px 20px;
 }
 
-/* Talise marks its edges with corner ticks rather than a full frame. Eight
-   gradient layers, two per corner — no extra elements to position. */
-.bracket {
-  --tick: 9px;
-  --hair: 1.5px;
-  --mark: var(--forest);
-  padding: 5px;
-  background:
-    linear-gradient(var(--mark), var(--mark)) 0 0 / var(--tick) var(--hair) no-repeat,
-    linear-gradient(var(--mark), var(--mark)) 0 0 / var(--hair) var(--tick) no-repeat,
-    linear-gradient(var(--mark), var(--mark)) 100% 0 / var(--tick) var(--hair) no-repeat,
-    linear-gradient(var(--mark), var(--mark)) 100% 0 / var(--hair) var(--tick) no-repeat,
-    linear-gradient(var(--mark), var(--mark)) 0 100% / var(--tick) var(--hair) no-repeat,
-    linear-gradient(var(--mark), var(--mark)) 0 100% / var(--hair) var(--tick) no-repeat,
-    linear-gradient(var(--mark), var(--mark)) 100% 100% / var(--tick) var(--hair) no-repeat,
-    linear-gradient(var(--mark), var(--mark)) 100% 100% / var(--hair) var(--tick) no-repeat;
-}
 
 /* Brand strip ------------------------------------------------------------ */
 
 .strip { display: flex; align-items: center; }
-.wordmark { font-family: var(--display); font-size: 17px; font-weight: 600; letter-spacing: -0.02em; }
+.wordmark { display: inline-flex; align-items: center; gap: 7px; font-family: var(--display); font-size: 18px; font-weight: 600; letter-spacing: -0.03em; }
+/* The site's mark: the gift glyph on a mint disc (packages/web/app/icon.svg). */
+.wordmark::before { content: ''; width: 24px; height: 24px; background: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%2216%22%20r%3D%2216%22%20fill%3D%22%23caffb8%22/%3E%3Cg%20transform%3D%22translate%284%204%29%22%20fill%3D%22none%22%20stroke%3D%22%231d4612%22%20stroke-width%3D%221.9%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M4%2010h16v10H4zM3%2010h18v3H3zM12%2010v10M12%2010H7.5a2.5%202.5%200%201%201%200-5c1.4%200%202.4%201.3%203%202.5L12%2010Zm0%200h4.5a2.5%202.5%200%201%200%200-5c-1.4%200-2.4%201.3-3%202.5L12%2010Z%22/%3E%3C/g%3E%3C/svg%3E") center / contain no-repeat; }
 
 /* Creator ---------------------------------------------------------------- */
 
@@ -85,11 +67,11 @@ main {
 .avatar .initials { color: var(--forest); font-family: var(--display); font-size: 31px; font-weight: 500; line-height: 1; }
 
 .name { margin-top: 3px; font-family: var(--display); font-size: 19px; font-weight: 600; letter-spacing: -0.02em; }
-.handle { color: var(--muted); font-size: 12px; }
+.handle { color: var(--muted); font: 400 12px var(--mono); }
 
 /* Headline --------------------------------------------------------------- */
 
-.headline { margin: 1px 0 0; color: var(--ink); font-family: var(--display); font-size: 26px; font-weight: 500; letter-spacing: -0.03em; line-height: 1.1; text-align: center; }
+.headline { margin: 1px 0 0; color: var(--ink); font-family: var(--display); font-size: 26px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.1; text-align: center; }
 .headline em { color: var(--forest); font-style: normal; }
 
 /* Amount ----------------------------------------------------------------- */
@@ -99,7 +81,7 @@ main {
 .field input {
   width: 100%;
   border: 1px solid var(--rule);
-  border-radius: 3px;
+  border-radius: 16px;
   padding: 16px;
   outline: 0;
   color: var(--ink);
@@ -108,69 +90,65 @@ main {
   text-align: center;
   transition: border-color 120ms ease, box-shadow 120ms ease;
 }
-.field input:focus-visible { border-color: var(--forest); box-shadow: 0 0 0 3px rgba(47, 106, 31, 0.15); }
+.field input:focus-visible { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(18, 26, 15, 0.08); }
 .field input[aria-invalid='true'] { border-color: var(--danger); }
-.denom { color: var(--faint); font-size: 9.5px; letter-spacing: 0.14em; text-align: right; text-transform: uppercase; }
+.denom { color: var(--faint); font: 400 10.5px var(--mono); letter-spacing: 0.14em; text-align: right; text-transform: uppercase; }
 .denom.is-error { color: var(--danger); letter-spacing: 0.02em; text-transform: none; }
 
 .presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
 .preset {
-  border: 1px solid var(--rule);
-  border-radius: 3px;
-  padding: 12px 0;
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 0;
   cursor: pointer;
-  color: var(--muted);
-  background: var(--card);
-  font: 500 12px var(--mono);
+  color: var(--ink);
+  background: rgba(18, 26, 15, 0.06);
+  font: 500 13px var(--mono);
   transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
 }
-.preset:hover { color: var(--ink); border-color: var(--faint); }
-.preset[aria-pressed='true'] { color: var(--forest); border-color: var(--forest); background: var(--mint); }
+.preset:hover { background: rgba(18, 26, 15, 0.1); }
+.preset[aria-pressed='true'] { color: var(--sage); background: var(--ink); }
 
 /* Memo ------------------------------------------------------------------- */
 
 .memo { display: flex; flex: 1; flex-direction: column; gap: 6px; min-height: 92px; }
 .memo-head { display: flex; align-items: baseline; justify-content: space-between; }
-.memo-head label { color: var(--muted); font-size: 10.5px; }
-#memo-count { color: var(--faint); font-size: 9.5px; letter-spacing: 0.06em; }
+.memo-head label { color: var(--muted); font-size: 12.5px; }
+#memo-count { color: var(--faint); font: 400 10.5px var(--mono); }
 #memo-count.is-full { color: var(--danger); }
 #memo {
   flex: 1;
   width: 100%;
   border: 1px solid var(--rule);
-  border-radius: 3px;
-  padding: 12px;
+  border-radius: 14px;
+  padding: 12px 14px;
   outline: 0;
   resize: none;
   color: var(--ink);
   background: var(--card);
-  font: 400 12px/1.6 var(--mono);
+  font: 400 14px/1.5 var(--display);
   transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 #memo::placeholder { color: var(--faint); }
-#memo:focus-visible { border-color: var(--forest); box-shadow: 0 0 0 3px rgba(47, 106, 31, 0.15); }
+#memo:focus-visible { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(18, 26, 15, 0.08); }
 
 /* Action ----------------------------------------------------------------- */
 
 .primary {
   width: 100%;
   border: 0;
-  border-radius: 2px;
+  border-radius: 999px;
   padding: 14px;
   cursor: pointer;
   color: var(--on-forest);
   background: var(--forest);
-  font: 500 12px var(--mono);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font: 600 14px var(--display);
   transition: background-color 120ms ease;
 }
 .primary:hover { background: #275718; }
 .primary:disabled { cursor: not-allowed; color: var(--faint); background: var(--rule); }
-/* The corner ticks are the affordance, so they go when the action does. */
-.bracket:has(.primary:disabled) { --mark: transparent; }
 
-:focus-visible { outline: 2px solid var(--forest); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
@@ -190,17 +168,17 @@ body.is-signing .headline { display: none; }
 body.is-signing #footer { flex: 1; justify-content: center; margin-top: 0; }
 
 .context-note:empty { display: none; }
-.context-note { margin: 0; color: var(--danger); font-size: 10.5px; line-height: 1.5; text-align: center; }
+.context-note { margin: 0; color: var(--danger); font-size: 12px; line-height: 1.5; text-align: center; }
 
-.signing-summary { margin: 0; color: var(--ink); font-size: 13px; font-weight: 500; text-align: center; }
+.signing-summary { margin: 0; color: var(--ink); font-size: 15px; font-weight: 600; text-align: center; }
 .signing-summary.sent { color: var(--forest); }
 
-.pin-label { color: var(--faint); font-size: 9.5px; letter-spacing: 0.1em; text-align: center; text-transform: uppercase; }
+.pin-label { color: var(--faint); font: 400 10.5px var(--mono); letter-spacing: 0.1em; text-align: center; text-transform: uppercase; }
 
 #pin {
   width: 100%;
   border: 1px solid var(--rule);
-  border-radius: 3px;
+  border-radius: 14px;
   padding: 13px;
   outline: 0;
   color: var(--ink);
@@ -210,9 +188,9 @@ body.is-signing #footer { flex: 1; justify-content: center; margin-top: 0; }
   text-align: center;
   transition: border-color 120ms ease, box-shadow 120ms ease;
 }
-#pin:focus-visible { border-color: var(--forest); box-shadow: 0 0 0 3px rgba(47, 106, 31, 0.15); }
+#pin:focus-visible { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(18, 26, 15, 0.08); }
 
-#footer .error { min-height: 14px; margin: 0; color: var(--danger); font-size: 11px; text-align: center; }
+#footer .error { min-height: 14px; margin: 0; color: var(--danger); font-size: 12px; text-align: center; }
 
 .link {
   border: 0;
@@ -220,7 +198,7 @@ body.is-signing #footer { flex: 1; justify-content: center; margin-top: 0; }
   cursor: pointer;
   color: var(--muted);
   background: none;
-  font: 400 10.5px var(--mono);
+  font: 500 12.5px var(--display);
   text-align: center;
   text-decoration: underline;
 }

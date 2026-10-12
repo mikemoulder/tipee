@@ -63,7 +63,7 @@ describe('unlock failures', () => {
 
   it('says plainly when the wallet is gone', () => {
     expect(unlockMessage(new WalletWipedError())).toBe(
-      'Too many wrong PINs — this wallet has been erased.',
+      'Too many wrong PINs. This wallet has been erased.',
     )
   })
 
@@ -251,14 +251,14 @@ describe('checking a send before the network is asked', () => {
     const typo = 'GCQRAKJ5P35HP7Q4ME24JSVZCOCN4IDNLUZML7BI6HVEATHDH5SI5YZQ'
     expect(validateSendDraft({ to: typo, amount: '1' })).toMatchObject({
       ok: false,
-      message: 'That is not a valid Stellar address — check for a typo.',
+      message: 'That isn’t a valid Stellar address. Check for a typo.',
     })
   })
 
   it('says what an EVM address is, rather than just refusing it', () => {
     expect(validateSendDraft({ to: '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984', amount: '1' })).toMatchObject({
       ok: false,
-      message: 'That is an EVM address. Tipee sends on Stellar: G… or C….',
+      message: 'That’s an Ethereum-style address. Tipee sends on Stellar: G… or C….',
     })
   })
 
