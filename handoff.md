@@ -1,12 +1,14 @@
 # Tipee Handoff
 
 ## Status
-- Date: 2026-10-11
+- Date: 2026-10-12
 - Current milestone: **Porting from Arc to Stellar** on branch `stellar-port`, for the Find Your Way hackathon (General Track, deadline 2026-10-12 23:59). The port plan lives at `../port-plan.md` beside this repo.
 - Done: escrow contract (deployed, 8 Rust tests), `@tipee/shared`, `@tipee/api` and `@tipee/extension` are all on Stellar. `npm test` passes **339**; `tsc --build` is clean; the extension builds.
 - **2026-10-12: wallets moved to OpenZeppelin smart accounts** (branch `oz-smart-accounts`), at the owner's request to use Stellar's official stack rather than our own wallet contract. See *Wallets: OpenZeppelin smart accounts* below.
 - Proven live on testnet: `scripts/verify-chain.mjs` (API path, ~19 s) and `scripts/e2e-extension.mjs` (the built extension in real Chrome: onboarding → wallet deployed + 10 USDC faucet in ~11 s → tip 1.50 USDC via the composer, confirmed ~8 s after signing → activity shows "Tipped @fireship"). A live claim paid 1.92 net / 0.08 fee.
-- Next: `/claim` page on the website, site copy Arc → Stellar, deploy the API somewhere public, README, demo video.
+- **2026-10-12 afternoon: the website was deleted and rebuilt from scratch** (owner's call: the old one read as generic). Design decisions live in `packages/web/DESIGN.md`; read it before touching the UI. Routes: `/` (hero with the animated tip-to-escrow stage, how it works, the live channel lookup on a dark band, Super Thanks vs Tipee, Stellar parts + real receipts, close), `/claim` (same API calls as before, rebuilt), `/install`; `/viewers` redirects to `/`. The API client moved to `packages/web/lib/api.ts`, links/receipts to `lib/site.ts`. The old hero clip, `ASSETS.md` and every old component are gone (in git history). `next build` is clean; checked at 1440 and 390 with 0 console errors and no overflow; the live lookup returns @fireship's 16.50 USDC from the contract.
+- `packages/web/.next-stale-root/` is a root-owned leftover build that could not be deleted without sudo (gitignored). Owner: `sudo rm -rf packages/web/.next-stale-root`.
+- Next: owner imports the site on Vercel (root `packages/web`, `NEXT_PUBLIC_TIPEE_API=https://tipee-api.duckdns.org`), og:image, demo video, submission.
 - Overall status: In progress. Everything below *Stellar Facts* describes the Arc build and is history until the port lands.
 
 ## Stellar Facts (testnet, 2026-10-11)

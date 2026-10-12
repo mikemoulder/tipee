@@ -4,7 +4,7 @@
 
 A Chrome extension adds a gift button beside Like. The tip goes into a Soroban escrow contract on Stellar, held under the creator's YouTube **channel ID** until they prove the channel is theirs and claim it. Gifters hold USDC in an **OpenZeppelin smart account**, the account contract Stellar's [smart-account-kit](https://github.com/stellar/smart-account-kit) deploys: no trustline, no XLM reserve, and Tipee's relayer pays every network fee.
 
-> Stellar **testnet**. Built for *Find Your Way* (General Track). Started on Circle's Arc in September and ported to Stellar for this hackathon: the contracts, the smart-wallet onboarding, the relayer and the claim flow are new. See [What was built when](#what-was-built-when).
+> Stellar **testnet**. Built for *Find Your Way* (General Track). Started on Circle's Arc in late August and ported to Stellar for this hackathon: the contracts, the smart-wallet onboarding, the relayer, the claim flow and the website are new. See [What was built when](#what-was-built-when).
 
 | | |
 | --- | --- |
@@ -83,6 +83,11 @@ API=http://localhost:3000 node scripts/verify-chain.mjs @fireship   # resolve â†
 
 ## What was built when
 
-Before this hackathon (September, on Arc): the extension shell, YouTube detection and gift button, composer, PIN-encrypted keystore, popup wallet, the API's channel resolution and tip records, and the marketing site.
+Tipee began on Circle's Arc. Nothing from that period used Stellar; every line of Stellar code was written for this hackathon.
 
-For this hackathon (October, on Stellar): the escrow contract, OpenZeppelin smart-account wallets with SEP-5 keys, the relayer, faucet and relay security rules, Stellar tip verification, activity from contract events, channel verification and claims, the `/claim` page, and the live balance lookup. The full history is in `git log`.
+| Period | Chain | Commits | What |
+| --- | --- | --- | --- |
+| 28 Aug to 15 Sep 2026, plus a site tweak and a bug-fix merge on the morning of 11 Oct | Arc | `8416255` â€¦ `696241e` (tag [`arc-final`](https://github.com/mikemoulder/tipee/releases/tag/arc-final)) | The extension shell, YouTube detection and gift button, composer, PIN-encrypted keystore, popup wallet, the API's channel resolution and tip records, and a first marketing site |
+| 11 to 12 Oct 2026 | Stellar | from `6266515` (tag [`stellar-port-start`](https://github.com/mikemoulder/tipee/releases/tag/stellar-port-start)) | The Soroban escrow contract, OpenZeppelin smart-account wallets with SEP-5 keys, the relayer, faucet and relay security rules, Stellar tip verification, activity from contract events, channel verification and claims, and the website, rebuilt from scratch with `/claim` and the live balance lookup |
+
+Compare the two with `git diff arc-final..main`. The full history is in `git log`.
