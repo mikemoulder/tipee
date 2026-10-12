@@ -24,9 +24,11 @@ import { useCountTo } from './tip-stage'
 const CHANNEL = { handle: '@miracodes', initials: 'MO' }
 
 const TIPS = [
-  { name: 'Sam', face: '/people/face-1.jpg', amount: 5, note: 'This fixed my build at 2am' },
-  { name: 'Priya', face: '/people/face-2.jpg', amount: 10, note: 'For the next video' },
-  { name: 'Leo', face: '/people/face-3.jpg', amount: 2, note: 'Best explanation on YouTube' },
+  { name: 'Leo', face: '/people/face-1.jpg', amount: 5, note: 'This fixed my build at 2am' },
+  { name: 'Sam', face: '/people/face-2.jpg', amount: 10, note: 'For the next video' },
+  { name: 'Marcus', face: '/people/face-3.jpg', amount: 2, note: 'Best explanation on YouTube' },
+  { name: 'Tunde', face: '/people/face-4.jpg', amount: 25, note: 'Saved me a week, honestly' },
+  { name: 'Erik', face: '/people/face-5.jpg', amount: 1, note: 'Keep them coming' },
 ]
 
 const START = 41.5

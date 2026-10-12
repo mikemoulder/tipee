@@ -24,8 +24,8 @@ export function Close() {
           </Reveal>
           <Reveal delay={80} className="flex flex-col items-start gap-5 overflow-hidden rounded-feature bg-tile p-8 shadow-card sm:p-12">
             <Photo
-              src="/people/creator.jpg"
-              className="-mx-8 -mt-8 mb-2 aspect-[16/9] w-[calc(100%+4rem)] max-w-none object-cover object-[50%_30%] sm:-mx-12 sm:-mt-12 sm:w-[calc(100%+6rem)]"
+              src="/people/creator-wide.jpg"
+              className="-mx-8 -mt-8 mb-2 aspect-[16/9] w-[calc(100%+4rem)] max-w-none object-cover sm:-mx-12 sm:-mt-12 sm:w-[calc(100%+6rem)]"
               fallback={null}
             />
             <p className="t-label">Making</p>
