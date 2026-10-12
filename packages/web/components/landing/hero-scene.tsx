@@ -87,7 +87,7 @@ export function HeroScene({ className }: { className?: string }) {
         </div>
 
         {/* Under the video: the gift beside Like */}
-        <div className="absolute top-[10%] left-0" style={depth(70)}>
+        <div className="absolute top-[18%] left-0 sm:top-[10%]" style={depth(70)}>
           <div className="drift-a flex items-center gap-2 rounded-chip bg-panel p-2 shadow-pop">
             <span className="flex h-9 items-center gap-1.5 rounded-chip bg-fill px-3 text-[13px] font-semibold">
               <ThumbIcon /> 3.1K
@@ -101,7 +101,7 @@ export function HeroScene({ className }: { className?: string }) {
         </div>
 
         {/* A tip that just arrived */}
-        <div className="absolute bottom-[20%] left-[-2%] w-[min(300px,62%)]" style={depth(110)}>
+        <div className="absolute bottom-[32%] left-0 w-[min(300px,66%)] sm:bottom-[20%] sm:left-[-2%]" style={depth(110)}>
           <div className="drift-b">
             <div key={count} className="toast-in flex items-start gap-3 rounded-tile bg-panel p-4 shadow-pop">
               <Photo
@@ -125,11 +125,11 @@ export function HeroScene({ className }: { className?: string }) {
         </div>
 
         {/* What is waiting for the channel */}
-        <div className="absolute right-[-3%] bottom-0 w-[min(250px,52%)]" style={depth(55)}>
+        <div className="absolute right-0 bottom-0 w-[min(250px,52%)] sm:right-[-3%]" style={depth(55)}>
           <div className="drift-c rounded-tile bg-panel p-4 shadow-pop sm:p-5">
             <div className="flex items-center justify-between gap-2">
               <span className="t-label whitespace-nowrap">Waiting for</span>
-              <span className="rounded-chip bg-fill px-2 py-0.5 text-[11px] whitespace-nowrap text-fg-mute">not on Tipee yet</span>
+              <span className="hidden rounded-chip bg-fill px-2 py-0.5 text-[11px] whitespace-nowrap text-fg-mute sm:inline">not on Tipee yet</span>
             </div>
             <p className="mt-1.5 text-[14px] font-semibold">{CHANNEL.handle}</p>
             <p className="mt-2 font-mono text-[30px] leading-none font-medium tracking-[-0.03em] text-accent tabular-nums">

@@ -31,7 +31,7 @@ export function Close() {
             <p className="t-label">Making</p>
             <h2 className="t-display-m">Run a channel? Your viewers may already have paid you.</h2>
             <p className="t-small max-w-[40ch] text-fg-mute">
-              Find your channel, prove it with a code in the description, and send the balance to any Stellar address.
+              Prove your channel once with a code in the description. After that, a passkey is all it takes to get paid.
             </p>
             <Button href="/claim" size="lg" variant="ghost" className="mt-auto">
               Claim your tips
