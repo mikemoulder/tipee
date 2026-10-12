@@ -1,0 +1,632 @@
+/* Tipee design tokens and primitives (Tailwind v4). The token block below is the
+ * only place a color, size or radius is decided; DESIGN.md says why. */
+
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, .theme-dark, .theme-dark *));
+
+/* ── TOKENS:START ─────────────── direction: soft-product, Tipee palette ── */
+/* The ground, ink and green are the extension's own (composer/styles.css),
+   so the site and the thing it installs look like one product. */
+:root,
+.theme-light {
+  color-scheme: light;
+  --ground: #f3f5ef;
+  --surface: #e9ede3;
+  --surface-2: #dfe4d8;
+  --panel: #ffffff;
+  --tile: #ffffff;
+  --fill: rgb(18 26 15 / 0.05);
+  --fill-strong: rgb(18 26 15 / 0.09);
+  --glass: rgb(243 245 239 / 0.82);
+  --glass-line: rgb(18 26 15 / 0.06);
+  --fg: #121a0f;
+  --fg-soft: #2f3a2a;
+  --fg-mute: #55634e;
+  --fg-faint: #7f8b78;
+  --line: #e2e6dd;
+  --line-strong: #cdd4c5;
+  --action: #121a0f;
+  --on-action: #f3f5ef;
+  --action-hover: #2b3726;
+  /* forest means money held for, or paid to, a creator. nothing else. */
+  --accent: #2f6a1f;
+  --accent-soft: #caffb8;
+  --on-accent-soft: #1d4612;
+  --success: #2f6a1f;
+  --success-soft: #e2f5d9;
+  --warning: #8a5a00;
+  --warning-soft: #fbf0d9;
+  --danger: #a3361a;
+  --danger-soft: #fbe9e3;
+  --focus: #121a0f;
+  --elev-card: 0 1px 2px rgb(18 26 15 / 0.04), 0 8px 24px -12px rgb(18 26 15 / 0.14);
+  --elev-pop: 0 2px 8px rgb(18 26 15 / 0.06), 0 32px 64px -24px rgb(18 26 15 / 0.3);
+  --elev-frame: 0 0 0 8px #ffffff, 0 40px 80px -20px rgb(18 26 15 / 0.25);
+  --field-a: #ffffff;
+  --field-b: #e3ead9;
+  --field-c: #d9f5cc;
+}
+
+[data-theme="dark"],
+.theme-dark {
+  color-scheme: dark;
+  --ground: #0f140d;
+  --surface: #171e14;
+  --surface-2: #1f281b;
+  --panel: #151c12;
+  --tile: #171e14;
+  --fill: rgb(236 241 232 / 0.06);
+  --fill-strong: rgb(236 241 232 / 0.1);
+  --glass: rgb(15 20 13 / 0.8);
+  --glass-line: rgb(255 255 255 / 0.08);
+  --fg: #eef2ea;
+  --fg-soft: #d3dacd;
+  --fg-mute: #a2ad9a;
+  --fg-faint: #6f7a68;
+  --line: #263020;
+  --line-strong: #364430;
+  --action: #eef2ea;
+  --on-action: #0f140d;
+  --action-hover: #d3dacd;
+  --accent: #caffb8;
+  --accent-soft: rgb(202 255 184 / 0.12);
+  --on-accent-soft: #caffb8;
+  --success: #9fe08a;
+  --success-soft: rgb(159 224 138 / 0.12);
+  --warning: #f2c46a;
+  --warning-soft: rgb(242 196 106 / 0.12);
+  --danger: #ff9b84;
+  --danger-soft: rgb(255 155 132 / 0.12);
+  --focus: #caffb8;
+  --elev-card: inset 0 1px 0 rgb(255 255 255 / 0.03), 0 12px 30px -18px rgb(0 0 0 / 0.7);
+  --elev-pop: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 32px 64px -24px rgb(0 0 0 / 0.8);
+  --elev-frame: 0 0 0 8px #1f281b, 0 40px 80px -20px rgb(0 0 0 / 0.7);
+  --field-a: #1f281b;
+  --field-b: #0f140d;
+  --field-c: #1d3313;
+}
+
+:root {
+  --display-weight: 600;
+  --display-xl: clamp(42px, 5vw, 68px);
+  --display-xl-lh: 1.02;
+  --display-xl-tracking: -0.035em;
+  --display-l: clamp(30px, 3.2vw, 44px);
+  --display-l-lh: 1.08;
+  --display-l-tracking: -0.028em;
+  --display-m: clamp(22px, 2.2vw, 30px);
+  --display-m-lh: 1.15;
+  --display-m-tracking: -0.02em;
+  --title: 20px;
+  --title-lh: 1.3;
+  --title-tracking: -0.015em;
+  --title-weight: 600;
+  --lead: 19px;
+  --lead-lh: 1.55;
+  --body: 17px;
+  --body-lh: 1.6;
+  --body-weight: 400;
+  --small: 15px;
+  --small-lh: 1.5;
+  /* borrowed from technical-grid: mono labels, as the extension does */
+  --label: 12px;
+  --label-lh: 1.3;
+  --label-tracking: 0.06em;
+  --label-weight: 500;
+  --label-transform: uppercase;
+  --label-family: var(--font-mono);
+  --ui-weight: 600;
+  --num-weight: 600;
+  --r-chip: 999px;
+  --r-button: 999px;
+  --r-input: 14px;
+  --r-tile: 24px;
+  --r-panel: 32px;
+  --r-feature: 40px;
+  --page-max: 1240px;
+  --gutter: clamp(20px, 4vw, 48px);
+  --section-y: clamp(88px, 10vw, 140px);
+  --stack: 48px;
+  --motion-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 180ms;
+  --dur-ui: 260ms;
+  --dur-reveal: 450ms;
+  --reveal-y: 16px;
+}
+/* ── TOKENS:END ───────────────────────────────────────────────────────── */
+
+/* Projector mode. CONFIG demo.surface: projector, add class="projector" to
+   <html>. Muted text rises to about 7:1 and hairlines thicken so they
+   survive the beam. */
+.projector {
+  --fg-mute: color-mix(in oklab, var(--fg) 78%, var(--ground));
+  --fg-faint: color-mix(in oklab, var(--fg) 62%, var(--ground));
+  --line: color-mix(in oklab, var(--fg) 22%, var(--ground));
+  --line-strong: color-mix(in oklab, var(--fg) 40%, var(--ground));
+  --body: 17px;
+}
+
+/* ── The palette is the tokens ─────────────────────────────────────────── */
+@theme {
+  --color-*: initial;
+  --shadow-*: initial;
+  --color-white: #ffffff;
+  --color-black: #000000;
+}
+
+@theme inline {
+  --color-ground: var(--ground);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-panel: var(--panel);
+  --color-tile: var(--tile);
+  --color-fill: var(--fill);
+  --color-fill-strong: var(--fill-strong);
+  --color-glass: var(--glass);
+  --color-glass-line: var(--glass-line);
+  --color-fg: var(--fg);
+  --color-fg-soft: var(--fg-soft);
+  --color-fg-mute: var(--fg-mute);
+  --color-fg-faint: var(--fg-faint);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-action: var(--action);
+  --color-on-action: var(--on-action);
+  --color-action-hover: var(--action-hover);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent-soft: var(--on-accent-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-focus: var(--focus);
+
+  --font-sans: var(--font-brand-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-brand-display, var(--font-brand-sans)), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-brand-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --radius-chip: var(--r-chip);
+  --radius-button: var(--r-button);
+  --radius-input: var(--r-input);
+  --radius-tile: var(--r-tile);
+  --radius-panel: var(--r-panel);
+  --radius-feature: var(--r-feature);
+
+  --shadow-card: var(--elev-card);
+  --shadow-pop: var(--elev-pop);
+  --shadow-frame: var(--elev-frame);
+
+  --container-page: var(--page-max);
+  --container-text: 720px;
+  --container-prose: 65ch;
+
+  --ease-out: var(--motion-out);
+  --ease-in-out: var(--motion-in-out);
+}
+
+/* ── Base ──────────────────────────────────────────────────────────────── */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  body {
+    background: var(--ground);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-size: var(--body);
+    line-height: var(--body-lh);
+    font-weight: var(--body-weight);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  h1, h2, h3, h4 {
+    font-weight: var(--display-weight);
+    text-wrap: balance;
+  }
+  p, li, dd {
+    text-wrap: pretty;
+  }
+  ::selection {
+    background: var(--fill-strong);
+    color: var(--fg);
+  }
+  /* Never ship an invisible focus ring. Judges tab through things. */
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 3px;
+  }
+  [hidden] {
+    display: none !important;
+  }
+}
+
+/* ── Type roles ────────────────────────────────────────────────────────────
+   Semantic level (h1, h2) and visual size are separate decisions. An h2 can
+   wear t-display-xl; a p can wear t-title. Pick the level for the outline
+   and the role for the look. */
+@utility t-display-xl {
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: var(--display-xl);
+  line-height: var(--display-xl-lh);
+  letter-spacing: var(--display-xl-tracking);
+  text-wrap: balance;
+}
+@utility t-display-l {
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: var(--display-l);
+  line-height: var(--display-l-lh);
+  letter-spacing: var(--display-l-tracking);
+  text-wrap: balance;
+}
+@utility t-display-m {
+  font-family: var(--font-display);
+  font-weight: var(--display-weight);
+  font-size: var(--display-m);
+  line-height: var(--display-m-lh);
+  letter-spacing: var(--display-m-tracking);
+  text-wrap: balance;
+}
+@utility t-title {
+  font-weight: var(--title-weight);
+  font-size: var(--title);
+  line-height: var(--title-lh);
+  letter-spacing: var(--title-tracking);
+}
+@utility t-lead {
+  font-size: var(--lead);
+  line-height: var(--lead-lh);
+  color: var(--fg-mute);
+  text-wrap: pretty;
+}
+@utility t-body {
+  font-size: var(--body);
+  line-height: var(--body-lh);
+}
+@utility t-small {
+  font-size: var(--small);
+  line-height: var(--small-lh);
+}
+@utility t-label {
+  font-family: var(--label-family);
+  font-size: var(--label);
+  line-height: var(--label-lh);
+  letter-spacing: var(--label-tracking);
+  font-weight: var(--label-weight);
+  text-transform: var(--label-transform);
+  color: var(--fg-faint);
+}
+@utility t-num {
+  font-weight: var(--num-weight);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* ── Buttons ───────────────────────────────────────────────────────────────
+   One height per size, one radius, five variants. One action button per
+   section; everything else is quiet, ghost or text. */
+@layer components {
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 44px;
+    padding: 0 22px;
+    border-radius: var(--r-button);
+    border: 1px solid transparent;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: var(--ui-weight);
+    line-height: 1;
+    letter-spacing: -0.005em;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    text-decoration: none;
+    transition:
+      background-color var(--dur-micro) ease,
+      border-color var(--dur-micro) ease,
+      color var(--dur-micro) ease,
+      opacity var(--dur-micro) ease,
+      transform var(--dur-micro) var(--motion-out);
+  }
+  .btn:active {
+    transform: scale(0.98);
+  }
+  .btn:disabled,
+  .btn[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+  }
+  .btn[aria-busy="true"] {
+    position: relative;
+    color: transparent;
+    pointer-events: none;
+    opacity: 1; /* busy is not disabled: keep the button at full strength */
+  }
+  .btn[aria-busy="true"]::after {
+    content: "";
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    border: 2px solid currentColor;
+    border-color: var(--btn-ink, currentColor) transparent var(--btn-ink, currentColor) transparent;
+    animation: btn-spin 0.8s linear infinite;
+  }
+  @keyframes btn-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  .btn-sm {
+    height: 36px;
+    padding: 0 16px;
+    font-size: 13px;
+  }
+  .btn-lg {
+    height: 48px;
+    padding: 0 28px;
+    font-size: 15px;
+  }
+  .btn-icon {
+    width: 44px;
+    padding: 0;
+  }
+  .btn-sm.btn-icon {
+    width: 36px;
+  }
+  .btn-action {
+    --btn-ink: var(--on-action);
+    background: var(--action);
+    color: var(--on-action);
+  }
+  .btn-action:hover:not(:disabled) {
+    background: var(--action-hover);
+  }
+  .btn-quiet {
+    --btn-ink: var(--fg);
+    background: var(--fill);
+    color: var(--fg);
+  }
+  .btn-quiet:hover:not(:disabled) {
+    background: var(--fill-strong);
+  }
+  .btn-ghost {
+    --btn-ink: var(--fg);
+    background: transparent;
+    color: var(--fg);
+    border-color: var(--line-strong);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    border-color: var(--fg);
+  }
+  .btn-text {
+    --btn-ink: var(--fg);
+    background: transparent;
+    color: var(--fg);
+    padding-inline: 12px;
+  }
+  .btn-text:hover:not(:disabled) {
+    background: var(--fill);
+  }
+  .btn-accent {
+    --btn-ink: var(--on-accent-soft);
+    background: var(--accent-soft);
+    color: var(--on-accent-soft);
+  }
+  .btn-accent:hover:not(:disabled) {
+    background: color-mix(in oklab, var(--accent-soft) 80%, var(--accent));
+  }
+  .btn-danger {
+    --btn-ink: #ffffff;
+    background: var(--danger);
+    color: #ffffff;
+  }
+
+  /* Inputs: one calm style. */
+  .field-input {
+    height: 48px;
+    width: 100%;
+    border-radius: var(--r-input);
+    border: 1px solid var(--line-strong);
+    background: var(--panel);
+    padding: 0 14px;
+    font: inherit;
+    font-size: 15px;
+    color: var(--fg);
+    transition: border-color var(--dur-micro) ease, box-shadow var(--dur-micro) ease;
+  }
+  .field-input::placeholder {
+    color: var(--fg-faint);
+  }
+  .field-input:focus {
+    outline: none;
+    border-color: var(--fg);
+    box-shadow: 0 0 0 3px var(--fill-strong);
+  }
+  .field-input[aria-invalid="true"] {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 3px var(--danger-soft);
+  }
+
+  /* Text link with an arrow that moves on hover. */
+  .arrow-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: var(--ui-weight);
+    color: var(--fg);
+    text-decoration: none;
+  }
+  .arrow-link > [data-arrow] {
+    transition: transform var(--dur-micro) var(--motion-out);
+  }
+  .arrow-link:hover > [data-arrow] {
+    transform: translateX(3px);
+  }
+
+  /* Skeleton: the shape of the real content, softly breathing. */
+  .skeleton {
+    border-radius: 6px;
+    background: var(--fill-strong);
+    animation: skeleton-breathe 1.6s ease-in-out infinite;
+  }
+  @keyframes skeleton-breathe {
+    50% {
+      opacity: 0.55;
+    }
+  }
+}
+
+/* ── Atmosphere ────────────────────────────────────────────────────────────
+   A .field is a soft blurred light inside a .panel: the one place a
+   gradient is allowed, mixed only from the --field tokens. One per screen. */
+.panel-atmos {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.field {
+  position: absolute;
+  inset: -12%;
+  z-index: -1;
+  pointer-events: none;
+  filter: blur(48px);
+  background:
+    radial-gradient(60% 70% at 85% 100%, var(--field-c) 0%, transparent 70%),
+    radial-gradient(50% 60% at 15% 20%, var(--field-a) 0%, transparent 70%),
+    radial-gradient(45% 55% at 60% 75%, var(--field-b) 0%, transparent 70%),
+    linear-gradient(135deg, var(--ground) 0%, var(--surface) 100%);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .field-drift {
+    animation: field-drift 22s ease-in-out infinite alternate;
+  }
+  @keyframes field-drift {
+    to {
+      transform: translate3d(-2.5%, -1.5%, 0) scale(1.06);
+    }
+  }
+}
+
+/* ── Motion: progressive, never a hidden page ───────────────────────────────
+   Content is visible by default. Only when JS is running (html.js, set by
+   the boot script in motion.tsx) does a [data-reveal] start hidden, and
+   html.reveal-all shows everything if the app never hydrates. */
+[data-reveal] {
+  transition:
+    opacity var(--dur-reveal) var(--motion-out),
+    transform var(--dur-reveal) var(--motion-out);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+.js [data-reveal]:not([data-in]) {
+  opacity: 0;
+  transform: translate3d(0, var(--reveal-y), 0);
+}
+.reveal-all [data-reveal] {
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+/* Line art that draws itself: <path class="draw" pathLength={1} /> inside a
+   <LineArt>. Stagger with style={{ "--d": "0.2s" }}. */
+.js [data-armed] .draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+.js [data-armed][data-in] .draw {
+  animation: draw 0.9s var(--motion-in-out) var(--d, 0s) forwards;
+}
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Marquee: two copies of one list, edges masked, paused offscreen. */
+.marquee {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+.marquee-track {
+  display: flex;
+  width: max-content;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .marquee-track {
+    animation: marquee var(--marquee-dur, 40s) linear infinite;
+  }
+  .marquee:hover .marquee-track,
+  [data-paused] .marquee-track {
+    animation-play-state: paused;
+  }
+}
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .js [data-reveal]:not([data-in]) {
+    opacity: 1;
+    transform: none;
+  }
+  .js [data-armed] .draw {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ── Tipee: the signature's two moments ─────────────────────────────────
+   The gift asks to be pressed (one soft ring), and a tip that lands slides in
+   on a mint wash that fades: money arriving for a creator, the accent's job. */
+@media (prefers-reduced-motion: no-preference) {
+  .gift-cue {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 45%, transparent);
+    animation: gift-cue 1.3s var(--motion-out) infinite;
+  }
+  @keyframes gift-cue {
+    to {
+      box-shadow: 0 0 0 10px transparent;
+    }
+  }
+  .ledger-in {
+    animation: ledger-in 900ms var(--motion-out) both;
+  }
+  @keyframes ledger-in {
+    0% {
+      opacity: 0;
+      transform: translate3d(0, -8px, 0);
+      background: var(--accent-soft);
+    }
+    35% {
+      opacity: 1;
+      transform: none;
+      background: var(--accent-soft);
+    }
+    100% {
+      background: transparent;
+    }
+  }
+}

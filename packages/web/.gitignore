@@ -1,2 +1,4 @@
 .next/
+.next-stale-root/
 next-env.d.ts
+.design/
