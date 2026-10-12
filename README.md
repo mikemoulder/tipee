@@ -24,6 +24,7 @@ A small creator can't take Super Thanks until they qualify for YouTube's Partner
 1. **Install and set up (≈10 s).** The extension makes a 12-word phrase (SEP-5, so it restores in any Stellar wallet), encrypts it with your PIN, and computes your wallet's contract address offline. Tipee's relayer deploys the wallet and the faucet sends 10 testnet USDC. You never hold XLM.
 2. **Tip.** On any video, click the gift, pick an amount, add a note, confirm. The extension simulates `escrow.tip(...)`, signs only your wallet's authorisation, and hands it to the relayer, which submits it and pays the fee. Confirmed in about 5 seconds.
 3. **Claim.** The creator opens `/claim`, finds their channel, pastes a one-hour code into their channel description, and claims the balance to any Stellar address. The escrow contract pays them 96% and the treasury 4% in one transaction.
+4. **Come back with a passkey.** On that first claim the creator can save a passkey and a payout address. After that, `/dashboard` signs them in with the passkey alone and shows what is waiting, the lifetime total (the escrow's `lifetime()`), and recent tips with their notes (the escrow's `tip` events for that channel). One button pays out, and only ever to the saved address.
 
 ## How Stellar is used
 
