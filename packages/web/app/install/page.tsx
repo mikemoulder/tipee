@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 
-import { ArrowLink, Button, Container, Eyebrow, Section, SectionHead } from '@/components/primitives'
-import { GITHUB_URL, RELEASE_URL, RELEASE_ZIP } from '@/lib/site'
+import { ArrowLink, Button, Container, Eyebrow, Section } from '@/components/primitives'
+import { RELEASE_URL, RELEASE_ZIP } from '@/lib/site'
 
 export const metadata: Metadata = {
   title: 'Add Tipee to Chrome',
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 const STEPS = [
   {
     title: 'Download and unzip',
-    body: 'The zip is the 0.3.0 release, built against Tipee’s live testnet API, so there is nothing to configure.',
+    body: 'Unzip it anywhere you like. There is nothing to configure.',
   },
   {
     title: 'Open chrome://extensions',
@@ -23,15 +23,8 @@ const STEPS = [
   },
   {
     title: 'Set a PIN and tip',
-    body: 'Click the Tipee icon and pick a PIN. Your smart wallet is deployed and sent 10 test USDC in about ten seconds. Open any video and press the gift beside Like.',
+    body: 'Click the Tipee icon and pick a PIN. Your wallet is ready with 10 test USDC in about ten seconds. Open any video and press the gift beside Like.',
   },
-]
-
-const BUILD = [
-  `git clone ${GITHUB_URL}.git`,
-  'cd tipee && npm install',
-  'VITE_TIPEE_API=https://tipee-api.duckdns.org npm run build -w @tipee/extension',
-  '# then load packages/extension/dist',
 ]
 
 export default function InstallPage() {
@@ -52,7 +45,7 @@ export default function InstallPage() {
               </Button>
               <ArrowLink href={RELEASE_URL}>Release notes</ArrowLink>
             </div>
-            <p className="mt-6 font-mono text-[12.5px] text-fg-mute">Stellar testnet. Test USDC only, nothing of value.</p>
+            <p className="mt-6 font-mono text-[12.5px] text-fg-mute">A test version: the dollars in it are play money.</p>
           </div>
         </Container>
       </section>
@@ -71,23 +64,6 @@ export default function InstallPage() {
         </Container>
       </Section>
 
-      <Section tone="surface">
-        <Container>
-          <SectionHead
-            eyebrow="From source"
-            title="Rather build it yourself?"
-            lead="Four commands. The build is what the release zip contains."
-            size="m"
-          />
-          <pre className="theme-dark overflow-x-auto rounded-tile bg-ground p-6 font-mono text-[13.5px] leading-[1.9] text-fg-soft">
-            {BUILD.map((line) => (
-              <span key={line} className={line.startsWith('#') ? 'block text-fg-faint' : 'block'}>
-                {line.startsWith('#') ? line : `$ ${line}`}
-              </span>
-            ))}
-          </pre>
-        </Container>
-      </Section>
     </>
   )
 }

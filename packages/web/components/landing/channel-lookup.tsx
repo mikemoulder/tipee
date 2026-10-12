@@ -4,7 +4,6 @@ import { useId, useState } from 'react'
 import { formatUsdc, parseChannelRef, parseUsdc, type ResolveCreatorResponse } from '@tipee/shared'
 
 import { ApiError, resolveChannel } from '@/lib/api'
-import { ESCROW_URL, contractUrl } from '@/lib/site'
 import { ArrowLink, Button, cx } from '../primitives'
 import { Skeleton } from '../states'
 
@@ -23,7 +22,7 @@ type Result =
   | { state: 'unparseable' }
   | { state: 'error'; message: string; handle: string }
 
-/** A channel with real testnet tips in escrow (16.50 USDC on 2026-10-12), so a first visit can see a hit. */
+/** A channel with real testnet tips waiting (16.50 USDC on 2026-10-12), so a first visit can see a hit. */
 const SAMPLE = '@fireship'
 
 export function ChannelLookup() {
@@ -94,7 +93,7 @@ export function ChannelLookup() {
         >
           {SAMPLE}
         </button>
-        , which has test tips waiting from our own runs.
+        , which has test tips waiting.
       </p>
 
       <div aria-live="polite" className="min-h-[1px] text-left">
@@ -122,7 +121,7 @@ export function ChannelLookup() {
 function LoadingCard({ handle }: { handle: string }) {
   return (
     <div className="flex flex-col gap-4 rounded-tile bg-tile p-6 shadow-card" role="status">
-      <span className="sr-only">Reading the escrow contract for {handle}</span>
+      <span className="sr-only">Checking {handle}</span>
       <div className="flex items-center gap-3">
         <Skeleton className="h-11 w-11 rounded-full" />
         <div className="flex flex-col gap-2">
@@ -131,7 +130,7 @@ function LoadingCard({ handle }: { handle: string }) {
         </div>
       </div>
       <Skeleton className="h-10 w-48" />
-      <p className="t-small text-fg-mute">Reading the escrow contract on Stellar testnet…</p>
+      <p className="t-small text-fg-mute">Checking what’s waiting…</p>
     </div>
   )
 }
@@ -144,14 +143,12 @@ function FoundCard({ found, balance }: { found: ResolveCreatorResponse; balance:
         <Avatar src={found.avatar_url} name={found.display_name} />
         <div className="flex min-w-0 flex-col leading-tight">
           <span className="truncate text-[16px] font-semibold">{found.display_name}</span>
-          <span className="truncate font-mono text-[12px] text-fg-faint">
-            {found.handle} · {found.channel_id}
-          </span>
+          <span className="truncate font-mono text-[12px] text-fg-faint">{found.handle}</span>
         </div>
       </div>
 
       <div>
-        <p className="t-label">{waiting ? 'Waiting in escrow' : 'In escrow'}</p>
+        <p className="t-label">{waiting ? 'Waiting for this channel' : 'Waiting'}</p>
         <p
           className={cx(
             'mt-2 font-mono text-[clamp(40px,6vw,56px)] leading-none font-medium tracking-[-0.04em] tabular-nums',
@@ -166,24 +163,18 @@ function FoundCard({ found, balance }: { found: ResolveCreatorResponse; balance:
       {waiting ? (
         <>
           <p className="t-small text-fg-mute">
-            Held by the{' '}
-            <a href={ESCROW_URL} target="_blank" rel="noreferrer" className="underline decoration-line-strong underline-offset-4 hover:decoration-fg">
-              escrow contract
-            </a>{' '}
-            under this channel’s ID. The owner can claim it in a few minutes, with no account.
+            Tips from viewers, held safely for this channel. If it’s yours, you can claim it in a few minutes, with no
+            account.
           </p>
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
-            <Button href={`/claim?handle=${encodeURIComponent(found.handle)}`}>Claim it</Button>
-            <ArrowLink href={contractUrl(found.escrow_contract)}>
-              See the contract
-            </ArrowLink>
-          </div>
+          <Button href={`/claim?handle=${encodeURIComponent(found.handle)}`} className="w-fit">
+            Claim it
+          </Button>
         </>
       ) : (
         <>
           <p className="t-small text-fg-mute">
-            Nothing yet, and nothing to set up either. The first tip anyone sends this channel will wait here, under its
-            ID, until the owner claims it.
+            Nothing yet, and nothing to set up either. The first tip anyone sends this channel will wait here until
+            the owner claims it.
           </p>
           <ArrowLink href="/install">Send the first one</ArrowLink>
         </>

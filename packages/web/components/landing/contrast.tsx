@@ -10,7 +10,7 @@ const ROWS: Array<{ topic: string; them: string; us: string }> = [
   {
     topic: 'Before the first tip',
     them: 'The creator applies, qualifies and switches it on',
-    us: 'Nothing. The tip waits in escrow',
+    us: 'Nothing. The tip waits for them',
   },
   {
     topic: 'Taken from the tip',

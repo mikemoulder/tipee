@@ -31,7 +31,7 @@ const mono = JetBrains_Mono({
 
 const TITLE = 'Tipee: tip any YouTuber in USDC on Stellar'
 const DESCRIPTION =
-  'A gift button beside Like. Your tip waits in a Stellar escrow contract under the channel ID until the creator proves it is theirs, even if they have never heard of Tipee.'
+  'A gift button beside Like. Your tip waits safely on Stellar until the creator claims it, even if they have never heard of Tipee.'
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'),

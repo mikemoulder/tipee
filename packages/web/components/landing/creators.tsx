@@ -10,7 +10,7 @@ export function Creators() {
           align="center"
           eyebrow="For creators"
           title="Someone may have tipped you already."
-          lead="Type your channel. The balance comes straight from the escrow contract on Stellar testnet, right now."
+          lead="Type your channel to see what’s waiting for you. No account needed."
         />
         <ChannelLookup />
       </Container>

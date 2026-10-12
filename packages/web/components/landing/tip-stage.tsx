@@ -94,7 +94,7 @@ export function TipStage({ className }: { className?: string }) {
       ref={ref}
       className={cx('panel-atmos relative rounded-panel bg-surface p-4 sm:p-6', className)}
       role="img"
-      aria-label={`A tip of ${usd(shownTip.amount)} USDC sent from the gift button beside Like lands in escrow for ${CHANNEL.handle}, a channel that is not on Tipee yet. ${usd(total)} USDC is held for it.`}
+      aria-label={`A tip of ${usd(shownTip.amount)} USDC sent from the gift button beside Like is held for ${CHANNEL.handle}, a channel that is not on Tipee yet. ${usd(total)} USDC is held for it.`}
     >
       <div className="field" aria-hidden />
       <div aria-hidden className="flex flex-col gap-4">
@@ -234,11 +234,11 @@ function Ledger({
   return (
     <div className="flex flex-col rounded-tile bg-tile p-4 shadow-card sm:p-5">
       <div className="flex items-center justify-between gap-2">
-        <span className="t-label whitespace-nowrap">In escrow</span>
+        <span className="t-label whitespace-nowrap">Waiting for</span>
         <span className="rounded-chip bg-fill px-2 py-0.5 text-[11px] whitespace-nowrap text-fg-mute">not on Tipee yet</span>
       </div>
       <p className="mt-2 text-[15px] font-semibold">{CHANNEL.handle}</p>
-      <p className="truncate font-mono text-[11px] text-fg-faint">channel {CHANNEL.id}</p>
+      <p className="text-[12px] text-fg-faint">Held until they claim it</p>
       <p className="mt-3 font-mono text-[34px] leading-none font-medium tracking-[-0.03em] text-accent tabular-nums">
         {usd(shown)}
         <span className="ml-1.5 text-[13px] tracking-normal text-fg-mute">USDC</span>

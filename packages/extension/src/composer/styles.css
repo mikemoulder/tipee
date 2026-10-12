@@ -30,8 +30,11 @@
 }
 
 * { box-sizing: border-box; }
+/* Form controls do not inherit the page font on their own. */
+button, input, textarea, select { font-family: inherit; }
 
-body { margin: 0; min-width: 340px; background: var(--sage); }
+/* Chrome gives extension pages its own body font; setting it here wins. */
+body { margin: 0; min-width: 340px; background: var(--sage); font-family: var(--display); }
 
 main {
   display: flex;

@@ -2,7 +2,7 @@ import Link from 'next/link'
 
 import { Wordmark } from './brand'
 import { Container } from './primitives'
-import { ESCROW_CONTRACT_ID, ESCROW_URL, GITHUB_URL, RELEASE_URL, SMART_ACCOUNT_KIT_URL, short } from '@/lib/site'
+import { GITHUB_URL, RECEIPTS, RELEASE_URL } from '@/lib/site'
 
 const COLUMNS: Array<{ title: string; links: Array<{ href: string; label: string }> }> = [
   {
@@ -14,11 +14,10 @@ const COLUMNS: Array<{ title: string; links: Array<{ href: string; label: string
     ],
   },
   {
-    title: 'On Stellar',
+    title: 'Stellar',
     links: [
-      { href: ESCROW_URL, label: `Escrow ${short(ESCROW_CONTRACT_ID)}` },
-      { href: SMART_ACCOUNT_KIT_URL, label: 'OpenZeppelin smart accounts' },
-      { href: 'https://tipee-api.duckdns.org/health', label: 'API health' },
+      { href: '/#stellar', label: 'Why Stellar' },
+      { href: RECEIPTS[0].url, label: 'See a real tip' },
     ],
   },
   {
@@ -68,7 +67,7 @@ export function SiteFooter() {
           ))}
         </div>
         <div className="mt-16 flex flex-col gap-2 border-t border-line-strong pt-6 sm:flex-row sm:justify-between">
-          <p className="t-small text-fg-mute">Stellar testnet. The USDC here is test money, and so is every balance.</p>
+          <p className="t-small text-fg-mute">A test version on Stellar testnet. Every dollar here is play money.</p>
           <p className="t-small text-fg-faint">Built for Find Your Way, 2026</p>
         </div>
       </Container>

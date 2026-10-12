@@ -11,8 +11,8 @@ export function Hero() {
             Tip any YouTuber. Even one who’s never heard of us.
           </h1>
           <p className="t-lead mt-6 max-w-[46ch]">
-            A gift button beside Like sends USDC on Stellar. It waits in an escrow contract under the
-            channel’s ID until the creator proves the channel is theirs.
+            A gift button beside Like sends a few dollars to the creator. If they’re not on Tipee yet, the
+            tip waits safely for them until they claim it.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-4">
             <Button href="/install" size="lg">
@@ -20,7 +20,7 @@ export function Hero() {
             </Button>
             <ArrowLink href="/#creators">Check a channel for tips</ArrowLink>
           </div>
-          <p className="mt-8 font-mono text-[12.5px] text-fg-mute">No XLM · no fees for you · 4% only when claimed</p>
+          <p className="mt-8 font-mono text-[12.5px] text-fg-mute">Free to send · creators keep 96%</p>
         </div>
         <TipStage className="lg:col-span-6" />
       </Container>

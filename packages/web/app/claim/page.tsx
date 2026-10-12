@@ -2,7 +2,6 @@ import type { Metadata } from 'next'
 
 import { ClaimFlow } from '@/components/claim-flow'
 import { Container, Eyebrow } from '@/components/primitives'
-import { ESCROW_CONTRACT_ID, ESCROW_URL, short } from '@/lib/site'
 
 export const metadata: Metadata = {
   title: 'Claim your tips',
@@ -11,8 +10,8 @@ export const metadata: Metadata = {
 
 const FACTS = [
   { title: 'No account', body: 'You prove the channel, not yourself. There is nothing to sign up for.' },
-  { title: '4%, once', body: 'Taken when you claim, by the contract, in the same transaction that pays you.' },
-  { title: 'Any Stellar address', body: 'An account with a USDC trustline, or a contract wallet such as your Tipee wallet.' },
+  { title: '4%, once', body: 'Taken only when you claim. Nothing was taken when your viewers sent it.' },
+  { title: 'Any Stellar address', body: 'Send it to any Stellar wallet that holds USDC, including your Tipee wallet.' },
 ]
 
 export default function ClaimPage() {
@@ -23,8 +22,7 @@ export default function ClaimPage() {
           <Eyebrow>For creators</Eyebrow>
           <h1 className="t-display-l mt-5">Claim what your viewers sent.</h1>
           <p className="t-lead mt-5 max-w-[44ch]">
-            Tips wait in escrow under your channel ID. Prove the channel is yours and the contract pays you, in about a
-            minute.
+            Your viewers’ tips are waiting for you. Prove the channel is yours and they’re paid out in about a minute.
           </p>
           <dl className="mt-10 flex flex-col border-t border-line-strong">
             {FACTS.map((fact) => (
@@ -34,14 +32,6 @@ export default function ClaimPage() {
               </div>
             ))}
           </dl>
-          <a
-            href={ESCROW_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-6 font-mono text-[12.5px] text-fg-mute no-underline hover:text-fg"
-          >
-            Escrow {short(ESCROW_CONTRACT_ID)} on stellar.expert ↗
-          </a>
         </div>
         <div className="lg:col-span-7">
           <ClaimFlow />

@@ -10,8 +10,7 @@ export function Close() {
             <p className="t-label">Watching</p>
             <h2 className="t-display-m">Halfway through a video that just saved your afternoon?</h2>
             <p className="t-small max-w-[40ch] text-fg-mute">
-              Install the extension and you get a wallet with 10 test USDC to tip with. No XLM, no seed phrase to write
-              down before you start.
+              Install the extension and you get a wallet with 10 test USDC to tip with. Tipee pays the fees.
             </p>
             <Button href="/install" size="lg" className="mt-auto">
               Add Tipee to Chrome

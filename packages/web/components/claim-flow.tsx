@@ -86,7 +86,7 @@ export function ClaimFlow() {
   function pay(current: Extract<Step, { name: 'pay' }>) {
     return run(async () => {
       const to = destination.trim()
-      if (!isStellarAddress(to)) throw new Error('Enter a Stellar address: G… for an account, C… for a contract wallet.')
+      if (!isStellarAddress(to)) throw new Error('That isn’t a Stellar wallet address. It starts with G or C and is 56 characters long.')
       const paid = await claim(current.token, to)
       setStep({
         name: 'done',
@@ -133,7 +133,7 @@ export function ClaimFlow() {
             <label htmlFor={handleId} className="t-title">
               Which channel is yours?
             </label>
-            <p className="t-small -mt-2 text-fg-mute">Your handle, or your channel’s URL. We read its balance from the escrow contract.</p>
+            <p className="t-small -mt-2 text-fg-mute">Your handle, or your channel’s URL. We’ll show you what’s waiting.</p>
             <input
               id={handleId}
               className="field-input font-mono"
@@ -154,8 +154,8 @@ export function ClaimFlow() {
           <div className="flex flex-col gap-5">
             <Amount label={`Waiting for ${step.handle}`} value={step.balance} />
             <p className="t-small text-fg-mute">
-              Held in the Tipee escrow contract under {step.displayName}’s channel ID. To release it, prove the channel is
-              yours. It takes a minute and needs no account.
+              Tips from {step.displayName}’s viewers, held safely until the owner claims them. Prove the channel is yours
+              to collect. It takes a minute and needs no account.
             </p>
             <div className="flex flex-wrap gap-2">
               <Button size="lg" busy={busy} onClick={() => void prove(step)}>
@@ -221,8 +221,8 @@ export function ClaimFlow() {
                 aria-invalid={problem ? true : undefined}
               />
               <p className="t-small text-fg-mute">
-                Any Stellar address. An account (G…) needs a USDC trustline; a contract wallet (C…), like your own Tipee
-                wallet, does not. Tipee keeps 4% now, and took nothing on the way in.
+                Any Stellar wallet that can hold USDC, including your own Tipee wallet. Tipee keeps 4% now, and took
+                nothing on the way in.
               </p>
             </div>
             <Button type="submit" size="lg" busy={busy} className="w-full sm:w-fit">
@@ -235,7 +235,7 @@ export function ClaimFlow() {
           <div className="flex flex-col gap-6">
             <Amount label={`Claimed · ${step.handle}`} value={step.net} />
             <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 border-t border-line pt-5 text-[14px]">
-              <dt className="text-fg-mute">In escrow</dt>
+              <dt className="text-fg-mute">Waiting for you</dt>
               <dd className="m-0 text-right font-mono tabular-nums">{step.gross}</dd>
               <dt className="text-fg-mute">Tipee fee, 4%</dt>
               <dd className="m-0 text-right font-mono tabular-nums">−{step.fee}</dd>
@@ -245,7 +245,7 @@ export function ClaimFlow() {
               <dd className="m-0 text-right font-mono text-[12px] break-all">{step.to}</dd>
             </dl>
             <Button href={explorerTxUrl(step.txHash)} variant="ghost" className="w-fit">
-              View the transaction on stellar.expert ↗
+              See the receipt ↗
             </Button>
           </div>
         )}
