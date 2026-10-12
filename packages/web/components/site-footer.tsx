@@ -10,6 +10,7 @@ const COLUMNS: Array<{ title: string; links: Array<{ href: string; label: string
     links: [
       { href: '/install', label: 'Install the extension' },
       { href: '/claim', label: 'Claim your tips' },
+      { href: '/dashboard', label: 'Creator dashboard' },
       { href: '/#how', label: 'How it works' },
     ],
   },

@@ -27,8 +27,8 @@ export function SiteNav() {
           ))}
         </nav>
         <div className="flex items-center gap-2">
-          <Button href="/claim" variant="text" size="sm" className="hidden sm:inline-flex">
-            Claim tips
+          <Button href="/dashboard" variant="text" size="sm" className="hidden sm:inline-flex">
+            Creator sign in
           </Button>
           <Button href="/install" size="sm">
             Add to Chrome

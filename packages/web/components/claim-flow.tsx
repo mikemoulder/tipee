@@ -1,9 +1,20 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useEffect, useId, useState } from 'react'
+import { browserSupportsWebAuthn } from '@simplewebauthn/browser'
 import { explorerTxUrl, isStellarAddress, parseChannelRef } from '@tipee/shared'
 
-import { ApiError, claim, confirmVerification, resolveChannel, startVerification } from '@/lib/api'
+import {
+  ApiError,
+  claim,
+  confirmVerification,
+  payOut,
+  registerPasskey,
+  resolveChannel,
+  signInWithPasskey,
+  startVerification,
+} from '@/lib/api'
 import { Button, cx } from './primitives'
 import { toast } from './states'
 
@@ -12,7 +23,8 @@ import { toast } from './states'
  *
  *   1. find the channel     the escrow balance under its ID, read live
  *   2. prove it is yours    a one-hour code in the channel description
- *   3. say where to pay     any Stellar address, account or contract
+ *   3. say where to pay     any Stellar address, account or contract, saved
+ *                           with a passkey so the next payout needs no code
  *   4. receipt              net, fee, and the transaction on the explorer
  *
  * Nothing here holds a secret. The code is useless to anyone who cannot edit
@@ -21,7 +33,7 @@ import { toast } from './states'
  */
 type Step =
   | { name: 'find' }
-  | { name: 'found'; handle: string; displayName: string; balance: string }
+  | { name: 'found'; handle: string; displayName: string; balance: string; hasAccount: boolean }
   | { name: 'prove'; handle: string; displayName: string; token: string }
   | { name: 'pay'; handle: string; displayName: string; token: string; balance: string }
   | { name: 'done'; handle: string; net: string; fee: string; gross: string; txHash: string; to: string }
@@ -34,11 +46,14 @@ export function ClaimFlow() {
   const [destination, setDestination] = useState('')
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
+  const [passkeys, setPasskeys] = useState(false)
+  const router = useRouter()
   const handleId = useId()
   const destId = useId()
 
   // Arriving from the homepage lookup carries the handle along.
   useEffect(() => {
+    setPasskeys(browserSupportsWebAuthn())
     const fromQuery = new URLSearchParams(window.location.search).get('handle')
     if (fromQuery) {
       setHandle(fromQuery)
@@ -64,7 +79,13 @@ export function ClaimFlow() {
       const ref = parseChannelRef(raw)
       if (!ref || ref.kind !== 'handle') throw new Error('Enter your channel handle, like @yourchannel.')
       const found = await resolveChannel(ref.handle)
-      setStep({ name: 'found', handle: found.handle, displayName: found.display_name, balance: found.unclaimed_balance })
+      setStep({
+        name: 'found',
+        handle: found.handle,
+        displayName: found.display_name,
+        balance: found.unclaimed_balance,
+        hasAccount: Boolean(found.has_account),
+      })
     })
   }
 
@@ -98,6 +119,29 @@ export function ClaimFlow() {
         to,
       })
       toast.success(`Claimed ${paid.amount_net} USDC`)
+    })
+  }
+
+  function signIn() {
+    return run(async () => {
+      await signInWithPasskey()
+      router.push('/dashboard')
+    })
+  }
+
+  /** Saves the payout address behind a new passkey, pays out what is waiting, and opens the dashboard. */
+  function saveAndClaim(current: Extract<Step, { name: 'pay' }>) {
+    return run(async () => {
+      const to = destination.trim()
+      if (!isStellarAddress(to)) throw new Error('That isn’t a Stellar wallet address. It starts with G or C and is 56 characters long.')
+      await registerPasskey(current.token, to)
+      if (Number(current.balance) > 0) {
+        const paid = await payOut()
+        toast.success(`Paid ${paid.amount_net} USDC to your wallet`)
+      } else {
+        toast.success('Your passkey is set up')
+      }
+      router.push('/dashboard')
     })
   }
 
@@ -153,14 +197,31 @@ export function ClaimFlow() {
         {step.name === 'found' && (
           <div className="flex flex-col gap-5">
             <Amount label={`Waiting for ${step.handle}`} value={step.balance} />
-            <p className="t-small text-fg-mute">
-              Tips from {step.displayName}’s viewers, held safely until the owner claims them. Prove the channel is yours
-              to collect. It takes a minute and needs no account.
-            </p>
+            {step.hasAccount ? (
+              <p className="t-small text-fg-mute">
+                {step.displayName} already has a Tipee account. Sign in with your passkey to pay this out, no code needed.
+              </p>
+            ) : (
+              <p className="t-small text-fg-mute">
+                Tips from {step.displayName}’s viewers, held safely until the owner claims them. Prove the channel is
+                yours once, and next time a passkey is all it takes.
+              </p>
+            )}
             <div className="flex flex-wrap gap-2">
-              <Button size="lg" busy={busy} onClick={() => void prove(step)}>
-                Verify this channel
-              </Button>
+              {step.hasAccount && passkeys ? (
+                <>
+                  <Button size="lg" busy={busy} onClick={() => void signIn()}>
+                    Sign in with passkey
+                  </Button>
+                  <Button variant="text" size="lg" onClick={() => void prove(step)}>
+                    Lost your passkey? Verify again
+                  </Button>
+                </>
+              ) : (
+                <Button size="lg" busy={busy} onClick={() => void prove(step)}>
+                  Verify this channel
+                </Button>
+              )}
               <Button variant="text" size="lg" onClick={() => setStep({ name: 'find' })}>
                 Not my channel
               </Button>
@@ -225,9 +286,26 @@ export function ClaimFlow() {
                 nothing on the way in.
               </p>
             </div>
-            <Button type="submit" size="lg" busy={busy} className="w-full sm:w-fit">
-              Claim {step.balance} USDC
-            </Button>
+            {passkeys ? (
+              <div className="flex flex-col gap-3">
+                <Button size="lg" busy={busy} className="w-full sm:w-fit" onClick={() => void saveAndClaim(step)}>
+                  {Number(step.balance) > 0 ? `Save with a passkey and claim ${step.balance} USDC` : 'Save with a passkey'}
+                </Button>
+                <p className="t-small text-fg-mute">
+                  A passkey uses your fingerprint, face or screen lock. Next time you just sign in: no code, and payouts go
+                  straight to this address.
+                </p>
+                {Number(step.balance) > 0 ? (
+                  <button type="submit" disabled={busy} className="arrow-link w-fit text-fg-mute hover:text-fg">
+                    Just claim this once, without a passkey
+                  </button>
+                ) : null}
+              </div>
+            ) : (
+              <Button type="submit" size="lg" busy={busy} className="w-full sm:w-fit">
+                Claim {step.balance} USDC
+              </Button>
+            )}
           </form>
         )}
 
