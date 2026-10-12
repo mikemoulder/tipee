@@ -12,6 +12,7 @@
     "typecheck": "tsc --build"
   },
   "dependencies": {
+    "@simplewebauthn/server": "^13.3.3",
     "@stellar/stellar-sdk": "17.1.0",
     "@tipee/shared": "*",
     "fastify": "^5.2.0",

@@ -39,6 +39,8 @@ export interface ResolveCreatorResponse {
   is_verified: boolean
   /** Decimal string, accounting units. Read from the escrow contract. */
   unclaimed_balance: string
+  /** The channel's owner has a Tipee account (passkey sign-in, saved payout address). */
+  has_account?: boolean
 }
 
 /**

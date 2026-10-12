@@ -55,7 +55,28 @@ export interface StellarGateway {
   relay(funcXdr: string, authXdr: string[]): Promise<string>
   /** Pays a channel's escrow out to `to`, verifier signing. */
   claim(channelId: string, to: string): Promise<{ txHash: string; net: bigint; fee: bigint }>
+  /** Everything ever tipped to a channel, claimed or not, accounting units. */
+  escrowLifetime(channelId: string): Promise<bigint>
+  /**
+   * A channel's recent tips and claims from the escrow's events, newest first.
+   * Covers the last few days the RPC keeps; `partial` says when it stopped short.
+   */
+  channelActivity(channelId: string): Promise<{ events: ChannelEvent[]; partial: boolean }>
 }
+
+/** One escrow event for a channel, as the creator dashboard shows it. */
+export type ChannelEvent =
+  | { kind: 'tip'; txHash: string; at: Date | null; ledger: number; amount: bigint; from: string; note: string }
+  | { kind: 'claim'; txHash: string; at: Date | null; ledger: number; net: bigint; fee: bigint; to: string }
+
+/**
+ * Event windows for `channelActivity`. The escrow is a quiet contract, so its
+ * topic-filtered queries can be wider than the extension's USDC scans
+ * (activity.ts): 10,000 ledgers is about fourteen hours, eight of them about
+ * four and a half days, inside what the public testnet RPC retains.
+ */
+const CHANNEL_WINDOW_LEDGERS = 10_000
+const CHANNEL_WINDOWS = 8
 
 export interface VerifiedTip {
   from: string
@@ -294,7 +315,92 @@ export function stellarGateway(keys: StellarKeys): StellarGateway {
       const [net, fee] = scValToNative(done.returnValue as xdr.ScVal) as [bigint, bigint]
       return { txHash: done.hash, net: fromStroops(net), fee: fromStroops(fee) }
     },
+
+    async escrowLifetime(channelId) {
+      const stroops = (await read(escrow.call('lifetime', nativeToScVal(channelId, { type: 'string' })))) as bigint
+      return fromStroops(BigInt(stroops ?? 0))
+    },
+
+    async channelActivity(channelId) {
+      const channel = nativeToScVal(channelId, { type: 'string' }).toXDR('base64')
+      const tipTopic = xdr.ScVal.scvSymbol('tip').toXDR('base64')
+      const claimTopic = xdr.ScVal.scvSymbol('claim').toXDR('base64')
+
+      let head: number
+      let oldest: number
+      try {
+        const latest = await server.getLatestLedger()
+        head = latest.sequence
+        // getHealth reports the oldest ledger this RPC still serves.
+        const health = await server.getHealth()
+        oldest = Math.max(health.oldestLedger ?? 1, head - CHANNEL_WINDOW_LEDGERS * CHANNEL_WINDOWS)
+      } catch {
+        throw new ChainUnavailableError()
+      }
+
+      const events: ChannelEvent[] = []
+      let partial = false
+      let end = head
+      for (let window = 0; window < CHANNEL_WINDOWS && end > oldest; window += 1) {
+        const start = Math.max(end - CHANNEL_WINDOW_LEDGERS + 1, oldest)
+        try {
+          const page = await server.getEvents({
+            startLedger: start,
+            endLedger: end + 1,
+            filters: [
+              { type: 'contract', contractIds: [ESCROW_CONTRACT_ID], topics: [[tipTopic, channel, '*']] },
+              { type: 'contract', contractIds: [ESCROW_CONTRACT_ID], topics: [[claimTopic, channel]] },
+            ],
+            limit: 100,
+          })
+          for (const event of page.events) {
+            const parsed = toChannelEvent(event)
+            if (parsed) events.push(parsed)
+          }
+        } catch {
+          if (window === 0) throw new ChainUnavailableError()
+          partial = true
+          break
+        }
+        end = start - 1
+      }
+
+      events.sort((a, b) => b.ledger - a.ledger)
+      return { events, partial }
+    },
   }
+}
+
+function toChannelEvent(event: rpc.Api.EventResponse): ChannelEvent | null {
+  try {
+    const [nameTopic, , fromTopic] = event.topic
+    if (!nameTopic) return null
+    const name = scValToNative(nameTopic) as string
+    const data = scValToNative(event.value) as Record<string, unknown>
+    const at = event.ledgerClosedAt ? new Date(event.ledgerClosedAt) : null
+    const base = { txHash: event.txHash, at, ledger: event.ledger }
+    if (name === 'tip') {
+      return {
+        ...base,
+        kind: 'tip',
+        from: fromTopic ? (scValToNative(fromTopic) as string) : '',
+        amount: fromStroops(BigInt(data.amount as bigint)),
+        note: String(data.note ?? ''),
+      }
+    }
+    if (name === 'claim') {
+      return {
+        ...base,
+        kind: 'claim',
+        to: String(data.to),
+        net: fromStroops(BigInt(data.net as bigint)),
+        fee: fromStroops(BigInt(data.fee as bigint)),
+      }
+    }
+  } catch {
+    // An event this code does not understand is skipped, not fatal.
+  }
+  return null
 }
 
 /** `Signer::External(ed25519_verifier, key)`, as the account contract encodes it. */

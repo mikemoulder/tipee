@@ -23,6 +23,10 @@ export interface Config {
   treasuryAddress: string | null
   /** Testnet USDC handed to a new wallet, accounting units as a decimal string. */
   faucetAmount: string
+  /** Where creator accounts (passkeys, payout addresses) are kept. */
+  accountsFile: string
+  /** Site origins whose passkeys this API accepts. Empty turns creator accounts off. */
+  siteOrigins: string[]
 }
 
 export class ConfigError extends Error {}
@@ -50,5 +54,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     verifierSecret,
     treasuryAddress: env.TREASURY_ADDRESS?.trim() || null,
     faucetAmount: env.FAUCET_AMOUNT?.trim() || '10',
+    accountsFile: env.ACCOUNTS_FILE?.trim() || `${env.HOME ?? '.'}/.local/share/tipee/accounts.json`,
+    siteOrigins: (env.SITE_ORIGINS ?? '')
+      .split(',')
+      .map((origin) => origin.trim().replace(/\/+$/, ''))
+      .filter(Boolean),
   }
 }

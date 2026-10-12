@@ -41,6 +41,8 @@ function fakeStellar(overrides: Partial<StellarGateway> = {}): StellarGateway {
     fund: vi.fn(async () => TX),
     relay: vi.fn(async () => TX),
     claim: vi.fn(async () => ({ txHash: TX, net: 9_600_000n, fee: 400_000n })),
+    escrowLifetime: vi.fn(async () => 0n),
+    channelActivity: vi.fn(async () => ({ events: [], partial: false })),
     ...overrides,
   }
 }

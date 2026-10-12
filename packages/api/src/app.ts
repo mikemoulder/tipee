@@ -1,3 +1,5 @@
+import type { AccountStore, Passkeys } from './accounts.ts'
+import { registerAccountRoutes } from './accounts-routes.ts'
 import { randomBytes } from 'node:crypto'
 
 import Fastify, { type FastifyInstance, type FastifyReply } from 'fastify'
@@ -53,6 +55,8 @@ export interface AppDependencies {
   /** Injected so token expiry is testable without waiting. */
   now?: (() => Date) | undefined
   logger?: boolean
+  /** Creator accounts (passkeys, saved payout address). Off when absent. */
+  accounts?: { store: AccountStore; passkeys: Passkeys; origins: string[] } | undefined
 }
 
 /** How long a verification token stays good, from issue to claim. */
@@ -87,7 +91,7 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   // cannot be allow-listed by name. Nothing here uses a cookie or credential.
   app.addHook('onSend', async (_request, reply) => {
     reply.header('access-control-allow-origin', '*')
-    reply.header('access-control-allow-headers', 'content-type')
+    reply.header('access-control-allow-headers', 'content-type, authorization')
     reply.header('access-control-allow-methods', 'GET, POST, OPTIONS')
   })
 
@@ -151,6 +155,7 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
       escrow_contract: ESCROW_CONTRACT_ID,
       is_verified: creator.isVerified,
       unclaimed_balance: formatUsdc(balance),
+      has_account: deps.accounts ? Boolean(await deps.accounts.store.byChannelId(creator.youtubeChannelId)) : false,
     }
     return reply.send(body)
   })
@@ -371,6 +376,18 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
     }
     return reply.code(201).send(response)
   })
+
+  if (deps.accounts) {
+    registerAccountRoutes(app, {
+      accounts: deps.accounts.store,
+      passkeys: deps.accounts.passkeys,
+      origins: deps.accounts.origins,
+      store: deps.store,
+      stellar: deps.stellar,
+      now,
+      liveVerification,
+    })
+  }
 
   async function liveVerification(token: string, reply: FastifyReply) {
     if (!/^tipee-[0-9a-f]{16}$/.test(token)) {

@@ -2,6 +2,7 @@ import { Pool } from 'pg'
 
 import { parseUsdc } from '@tipee/shared'
 
+import { fileAccounts, simpleWebAuthn } from './accounts.ts'
 import { buildApp } from './app.ts'
 import { loadConfig } from './config.ts'
 import { migrate } from './db/migrate.ts'
@@ -38,10 +39,14 @@ async function main(): Promise<void> {
     faucetAmount: parseUsdc(config.faucetAmount),
     treasuryAddress: config.treasuryAddress,
     logger: true,
+    accounts: config.siteOrigins.length
+      ? { store: fileAccounts(config.accountsFile), passkeys: simpleWebAuthn, origins: config.siteOrigins }
+      : undefined,
   })
 
   if (!config.databaseUrl) app.log.warn('DATABASE_URL is not set — using the in-memory store.')
   if (!config.verifierSecret) app.log.warn('VERIFIER_SECRET is not set — creator claims will be refused.')
+  if (!config.siteOrigins.length) app.log.warn('SITE_ORIGINS is not set — creator accounts (passkeys) are off.')
 
   await app.listen({ port: config.port, host: config.host })
 }
