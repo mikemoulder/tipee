@@ -6,6 +6,10 @@ const nextConfig = {
   // `.ts`, which Node's type stripping requires and webpack resolves literally.
   transpilePackages: ['@tipee/shared'],
   reactStrictMode: true,
+  // The old viewers page is now part of the home page.
+  async redirects() {
+    return [{ source: '/viewers', destination: '/', permanent: true }]
+  },
 }
 
 export default nextConfig
