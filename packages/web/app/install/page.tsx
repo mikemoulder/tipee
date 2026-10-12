@@ -12,13 +12,17 @@ export const metadata = {
  *
  * The store listing does not exist yet, so this page is honest about that
  * rather than pointing at a dead Web Store URL — a broken install link is worse
- * than a page saying "not yet". The unpacked instructions are real and work
- * today, which is what a judge or an early tester actually needs.
+ * than a page saying "not yet". The download is the GitHub release, built
+ * against the live API, so nothing needs building; the commands are for anyone
+ * who would rather build it themselves.
  */
+const RELEASE_ZIP = 'https://github.com/mikemoulder/tipee/releases/latest/download/tipee-extension-0.3.0-stellar-testnet.zip'
+
 const COMMANDS = [
   'git clone https://github.com/mikemoulder/tipee.git',
   'cd tipee && npm install',
-  'npm run build',
+  'VITE_TIPEE_API=https://tipee-api.duckdns.org npm run build -w @tipee/extension',
+  '# then load packages/extension/dist',
 ]
 
 export default function InstallPage() {
@@ -34,9 +38,15 @@ export default function InstallPage() {
             </h1>
             <p className="prose-measure m-0 text-[18px] leading-relaxed text-muted">
               Tipee is still in development, so there is no one-click install to give you. It does
-              run today — you load it unpacked, which takes about a minute and is how every Chrome
-              extension is tested before it ships.
+              run today — download it and load it unpacked, which takes about a minute and is how
+              every Chrome extension is tested before it ships.
             </p>
+            <a
+              href={RELEASE_ZIP}
+              className="inline-flex w-fit items-center gap-2 rounded-pill bg-forest px-6 py-3 text-[15px] font-bold text-on-forest no-underline transition-colors hover:bg-deep"
+            >
+              Download the extension (.zip)
+            </a>
             <div className="flex flex-wrap gap-2">
               <Pill tone="mint">Chrome &amp; Edge · Manifest V3</Pill>
               <Pill tone="tint">Roughly one minute</Pill>
@@ -55,8 +65,8 @@ export default function InstallPage() {
         <Steps
           items={[
             {
-              title: 'Build the extension',
-              body: 'Clone the repository and run npm install, then npm run build. The loadable extension is written to packages/extension/dist.',
+              title: 'Download and unzip',
+              body: 'Download the zip above and unzip it anywhere. It is built and pointed at Tipee’s live testnet service, so there is nothing to configure.'
             },
             {
               title: 'Open the extensions page',
@@ -64,7 +74,7 @@ export default function InstallPage() {
             },
             {
               title: 'Load unpacked',
-              body: 'Click "Load unpacked" and choose the packages/extension/dist folder — the folder itself, not a file inside it.',
+              body: 'Click "Load unpacked" and choose the unzipped folder — the folder itself, not a file inside it.',
             },
             {
               title: 'Set up the wallet',
@@ -79,7 +89,7 @@ export default function InstallPage() {
               <span className="size-2.5 rounded-pill bg-[#ff5f57]" />
               <span className="size-2.5 rounded-pill bg-[#febc2e]" />
               <span className="size-2.5 rounded-pill bg-[#28c840]" />
-              <span className="ml-2 font-mono text-[11px] text-white/40">step one</span>
+              <span className="ml-2 font-mono text-[11px] text-white/40">or build it yourself</span>
             </div>
             <pre className="m-0 overflow-x-auto p-5 font-mono text-[12.5px] leading-relaxed text-mint">
               {COMMANDS.map((line) => (
